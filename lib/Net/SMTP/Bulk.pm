@@ -14,11 +14,11 @@ Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 =head1 VERSION
 
-Version 0.02
+Version 0.03
 
 =cut
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 
 =head1 SYNOPSIS
@@ -35,6 +35,7 @@ See Net::SMTP for syntax.
 =head1 SUBROUTINES/METHODS
 
 =head2 new($server,%options)
+
 =head2 new(%options)
 
 Options:
@@ -60,15 +61,22 @@ The callback must return 0 it to follow proper proceedures. You can overwrite th
 You can supply multiple hosts in an array.
 
 
-=head2 auth ( [ MECHANISM,] USERNAME, PASSWORD  )
+=head2 auth( [ MECHANISM,] USERNAME, PASSWORD  )
 *Requires Authen::SASL
-=head2 mail ( ADDRESS )
-=head2 to ( ADDRESS )
-=head2 data ()
-=head2 datasend ( DATA )
-=head2 dataend ( DATA )
-=head2 reconnect (  )
-=head2 quit (  )
+
+=head2 mail( ADDRESS )
+
+=head2 to( ADDRESS )
+
+=head2 data()
+
+=head2 datasend( DATA )
+
+=head2 dataend( DATA )
+
+=head2 reconnect(  )
+
+=head2 quit(  )
 
 =cut
 
@@ -415,7 +423,7 @@ sub _CONNECT {
 
             $self->_READ($k);
             
-            if ($self->{status_code} == 220) {
+            if ($self->{status_code}{ $k->[0] }{ $k->[1] } == 220) {
                 my $r=$self->_FUNC('connect_pass',$self,$k,0,$self->{queue}{ $k->[0] }{ $k->[1] });
                 
                 if ($r != 0) {

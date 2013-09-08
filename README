@@ -2,7 +2,7 @@ NAME
     Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 VERSION
-    Version 0.02
+    Version 0.03
 
 SYNOPSIS
     This is a rewrite of Net::SMTP using AnyEvent and Coro as a backbone. It
@@ -19,7 +19,7 @@ SYNOPSIS
 
 SUBROUTINES/METHODS
   new($server,%options)
-=head2 new(%options)
+  new(%options)
     Options: Host - Hostname or IP address Port - The port to which to
     connect to on the server (default: 25) Hello - The domain name you wish
     to connect to (default: [same as server]) Debug - Debug information
@@ -42,15 +42,15 @@ SUBROUTINES/METHODS
   new(%options, Hosts=>[\%options2,\%options3])
     You can supply multiple hosts in an array.
 
-  auth ( [ MECHANISM,] USERNAME, PASSWORD  )
+  auth( [ MECHANISM,] USERNAME, PASSWORD  )
 *Requires Authen::SASL
-=head2 mail ( ADDRESS )
-=head2 to ( ADDRESS )
-=head2 data ()
-=head2 datasend ( DATA )
-=head2 dataend ( DATA )
-=head2 reconnect (  )
-=head2 quit (  )
+  mail( ADDRESS )
+  to( ADDRESS )
+  data()
+  datasend( DATA )
+  dataend( DATA )
+  reconnect(  )
+  quit(  )
 AUTHOR
     KnowZero, `<knowzerox at yahoo.com>'
 
