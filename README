@@ -1,0 +1,92 @@
+NAME
+    Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
+
+VERSION
+    Version 0.01
+
+SYNOPSIS
+    This is a rewrite of Net::SMTP using AnyEvent and Coro as a backbone. It
+    supports AUTH and SSL (no STARTTLS support yet). This module can be used
+    as a drop in replacement for Net::SMTP. At this point this module is
+    EXPIREMENTAL, so use at your own risk. Functionality can change at any
+    time.
+
+        use Net::SMTP::Bulk;
+
+        my $smtp = Net::SMTP::Bulk->new($server, %options);
+
+    See Net::SMTP for syntax.
+
+SUBROUTINES/METHODS
+  new($server,%options)
+=head2 new(%options)
+    Options: Host - Hostname or IP address Port - The port to which to
+    connect to on the server (default: 25) Hello - The domain name you wish
+    to connect to (default: [same as server]) Debug - Debug information
+    (off: 0, on: 1) (default: 0 [disabled]) OPTIONAL Secure - If you wish to
+    use a secure connection. (0 - None, 1 - SSL [no verify]) OPTIONAL
+    [Requires Net::SSLeay] Threads - How many concurrent connections per
+    host (default: 2) OPTIONAL
+
+    Callbacks - You can supply callback functions on certain conditions,
+    these conditions include:
+
+    connect_pass,connect_fail,auth_pass,auth_fail,reconnect_pass,reconnect_f
+    ail,pass,fail,hang
+
+    The callback must return 0 it to follow proper proceedures. You can
+    overwrite the defaults by supplying a different return.
+
+    0 - Default 1 - Remove Thread 2 - Reconnect
+
+  new(%options, Hosts=>[\%options2,\%options3])
+    You can supply multiple hosts in an array.
+
+  auth ( [ MECHANISM,] USERNAME, PASSWORD  )
+*Requires Authen::SASL
+=head2 mail ( ADDRESS )
+=head2 to ( ADDRESS )
+=head2 data ()
+=head2 datasend ( DATA )
+=head2 dataend ( DATA )
+=head2 reconnect (  )
+=head2 quit (  )
+AUTHOR
+    KnowZero, `<knowzerox at yahoo.com>'
+
+BUGS
+    Please report any bugs or feature requests to `bug-net-smtp-bulk at
+    rt.cpan.org', or through the web interface at
+    http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Net-SMTP-Bulk. I will be
+    notified, and then you'll automatically be notified of progress on your
+    bug as I make changes.
+
+SUPPORT
+    You can find documentation for this module with the perldoc command.
+
+        perldoc Net::SMTP::Bulk
+
+    You can also look for information at:
+
+    * RT: CPAN's request tracker (report bugs here)
+        http://rt.cpan.org/NoAuth/Bugs.html?Dist=Net-SMTP-Bulk
+
+    * AnnoCPAN: Annotated CPAN documentation
+        http://annocpan.org/dist/Net-SMTP-Bulk
+
+    * CPAN Ratings
+        http://cpanratings.perl.org/d/Net-SMTP-Bulk
+
+    * Search CPAN
+        http://search.cpan.org/dist/Net-SMTP-Bulk/
+
+ACKNOWLEDGEMENTS
+LICENSE AND COPYRIGHT
+    Copyright 2013 KnowZero.
+
+    This program is free software; you can redistribute it and/or modify it
+    under the terms of either: the GNU General Public License as published
+    by the Free Software Foundation; or the Artistic License.
+
+    See http://dev.perl.org/licenses/ for more information.
+
