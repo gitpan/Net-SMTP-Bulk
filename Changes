@@ -1,5 +1,10 @@
 Revision history for Net-SMTP-Bulk
 
-0.01    Date/time
-        First version, released on an unsuspecting world.
+0.02    Sept 08 2013
+        = Fixed <CR><LF>.<CR><LF>
+	= Fixed Remove Thread
+	= Fixed pass callbacks
+
+0.01    Sept 07 2013
+        = First version, released on an unsuspecting world.
 

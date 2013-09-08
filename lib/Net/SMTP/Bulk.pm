@@ -14,11 +14,11 @@ Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 =head1 VERSION
 
-Version 0.01
+Version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 
 =head1 SYNOPSIS
@@ -110,7 +110,7 @@ sub new {
 sub mail {
     my $self=shift;
     my $str=shift;
-    my $k=shift||$self->{last};
+    my $k=shift||$self->{last}[0];
     $str=~s/\n$//s;
     push( @{$self->{queue}{ $k->[0] }{ $k->[1] }}, ['MAIL',250,'MAIL FROM: '.$str] );
     
@@ -119,14 +119,14 @@ sub mail {
 sub to {
     my $self=shift;
     my $str=shift;
-    my $k=shift||$self->{last};
+    my $k=shift||$self->{last}[0];
     $str=~s/\n$//s;
     push( @{$self->{queue}{ $k->[0] }{ $k->[1] }}, ['TO',250,'RCPT TO: '.$str] );
 }
 
 sub data {
     my $self=shift;
-    my $k=shift||$self->{last};
+    my $k=shift||$self->{last}[0];
     
     push( @{$self->{queue}{ $k->[0] }{ $k->[1] }}, ['DATA',354,'DATA'] );
     $self->{data}{ $k->[0] }{ $k->[1] }='';
@@ -135,22 +135,22 @@ sub data {
 sub datasend {
     my $self=shift;
     my $str=shift;
-    my $k=shift||$self->{last};
+    my $k=shift||$self->{last}[0];
     $str=~s/\n$//s;
     $self->{data}{ $k->[0] }{ $k->[1] }.=$str."\n";
 }
 
 sub dataend {
     my $self=shift;
-    my $k=shift||$self->{last};
+    my $k=shift||$self->{last}[0];
     
-    push( @{$self->{queue}{ $k->[0] }{ $k->[1] }}, ['DATAEND',250,$self->{data}{ $k->[0] }{ $k->[1] }."\n."] );
+    push( @{$self->{queue}{ $k->[0] }{ $k->[1] }}, ['DATAEND',250,$self->{data}{ $k->[0] }{ $k->[1] }."\r\n."] );
     
     $self->{queue_size}=$#{$self->{queue}{ $k->[0] }{ $k->[1] }} if $self->{queue_size} < $#{$self->{queue}{ $k->[0] }{ $k->[1] }};
     
     $self->_NEXT();
     
-    $self->_BULK() if $self->{last}[2] == 0;
+    $self->_BULK() if $self->{last}[1] == 0;
 }
 
 sub auth {
@@ -166,7 +166,7 @@ sub auth {
     
     $user=shift||'';
     $pass=shift||'';
-    $k=shift||$self->{last};
+    $k=shift||$self->{last}[0];
     
     require MIME::Base64;
     require Authen::SASL;
@@ -205,7 +205,7 @@ sub auth {
         
         if ($self->{status_code}{ $k->[0] }{ $k->[1] } == 235) {
             $self->{auth}{ $k->[0] }{ $k->[1] }=[1,$mech];
-            my $r=$self->_FUNC('auth_success',$self,$k,0,$self->{queue}{ $k->[0] }{ $k->[1] });
+            my $r=$self->_FUNC('auth_pass',$self,$k,0,$self->{queue}{ $k->[0] }{ $k->[1] });
             
             if ($r != 0) {
                 $self->_FUNC_CALLBACK($k,0,$r);
@@ -242,7 +242,7 @@ sub quit {
 
 sub reconnect{
     my $self=shift;
-    my $k=shift||$self->{last};
+    my $k=shift||$self->{last}[0];
     
     $self->_CONNECT($k);
     if ( $self->{auth}{ $k->[0] }{ $k->[1] }[0] == 1 ) {
@@ -262,20 +262,20 @@ sub _BULK {
     foreach my $q ( 0..$self->{queue_size} ) {
         
         foreach my $k (@{$self->{order}}) {
-            if (exists($self->{queue}{ $k->[0] }{ $k->[1] }[$q])) {
+            if ($k->[2] == 1 and exists($self->{queue}{ $k->[0] }{ $k->[1] }[$q])) {
                 $self->_WRITE($k,$self->{queue}{ $k->[0] }{ $k->[1] }[$q][2]);
             }
  
         }
 
         foreach my $k (@{$self->{order}}) {
-            if (exists($self->{queue}{ $k->[0] }{ $k->[1] }[$q])) {
+            if ($k->[2] == 1 and exists($self->{queue}{ $k->[0] }{ $k->[1] }[$q])) {
                 $self->_READ($k);
                 
                 if ($self->{status_code}{ $k->[0] }{ $k->[1] } == $self->{queue}{ $k->[0] }{ $k->[1] }[$q][1] ) {
                     #GOOD
                     no strict;
-                    my $r=$self->_FUNC('success',$self,$k,$q,$self->{queue}{ $k->[0] }{ $k->[1] });
+                    my $r=$self->_FUNC('pass',$self,$k,$q,$self->{queue}{ $k->[0] }{ $k->[1] });
                     
                     if ($r != 0) {
                         $self->_FUNC_CALLBACK($k,$q,$r);
@@ -336,13 +336,15 @@ sub _FUNC_CALLBACK {
     
     if ($r == 1) {
         #remove thread
-        splice(@{$self->{order}}, $self->{last}[2], 1 );
-        
+        $self->{order}[ $self->{last}[1] ][2]=0;
+        $self->{last}=[ $self->{order}[ $self->{last}[1] ], $self->{last}[1] ];
+        $self->_DEBUG($k,'++REMOVE THREAD++') if $self->{debug} == 1;
     } elsif ($r == 2) {
         #reconnect
+        $self->_DEBUG($k,'++RECONNECT++') if $self->{debug} == 1;
         my $reconnect=$self->reconnect($k);
         if ($reconnect == 1) {
-            my $r2=$self->_FUNC('reconnect_success',$self,$k,$q,$self->{queue}{ $k->[0] }{ $k->[1] });
+            my $r2=$self->_FUNC('reconnect_pass',$self,$k,$q,$self->{queue}{ $k->[0] }{ $k->[1] });
         } else {
             my $r2=$self->_FUNC('reconnect_fail',$self,$k,$q,$self->{queue}{ $k->[0] }{ $k->[1] });
                                 
@@ -366,7 +368,7 @@ sub _PREPARE {
    
         my %new=( %{$hosts->[$i]} );
         $self->{host}{ $new{Host} }||=$new{Host};
-        $self->{last}=[$new{Host},0,0] if $i == 0; 
+        $self->{last}=[[$new{Host},0],0] if $i == 0; 
         if ($self->{host}{ $new{Host} }=~s/\:(\d+?)$//is) {
             $self->{port}{ $new{Host} }=$1;  
         }
@@ -382,7 +384,7 @@ sub _PREPARE {
             $self->{auth}{ $new{Host} }{$t}=[0,''];
             $self->{queue}{ $new{Host} }{$t}=[];
             
-            push(@{$self->{order}}, [$new{Host},$t] );
+            push(@{$self->{order}}, [$new{Host},$t,1] );
             
             $self->_CONNECT([$new{Host},$t]);
 
@@ -414,7 +416,7 @@ sub _CONNECT {
             $self->_READ($k);
             
             if ($self->{status_code} == 220) {
-                my $r=$self->_FUNC('connect_success',$self,$k,0,$self->{queue}{ $k->[0] }{ $k->[1] });
+                my $r=$self->_FUNC('connect_pass',$self,$k,0,$self->{queue}{ $k->[0] }{ $k->[1] });
                 
                 if ($r != 0) {
                     $self->_FUNC_CALLBACK($k,0,$r);
@@ -446,11 +448,16 @@ sub _NEXT {
     my $k=shift;
     
     my @next;
-    if (exists($self->{order}[ $self->{last}[2]+1 ])) {
-        @next=( @{$self->{order}[ $self->{last}[2]+1 ]}, $self->{last}[2]+1 );
-    } else {
-        @next=(@{$self->{order}[0]},0);    
+    
+    while (!exists($next[0])) {
+        $self->{last}[1]++;
+        if (exists($self->{order}[ $self->{last}[1] ])) {
+            @next=( $self->{order}[ $self->{last}[1] ], $self->{last}[1] ) if $self->{order}[ $self->{last}[1] ][2]==1;
+        } else {
+            @next=($self->{order}[0],0);    
+        }
     }
+    
     
     $self->{last}=\@next;
 }
