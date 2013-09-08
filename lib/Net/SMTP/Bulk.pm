@@ -14,11 +14,11 @@ Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 =head1 VERSION
 
-Version 0.04
+Version 0.05
 
 =cut
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 
 =head1 SYNOPSIS
@@ -343,7 +343,7 @@ sub _FUNC {
     no strict;
     my $func=shift;
     return &{$self->{func}{$func}}(@_) if exists($self->{func}{$func});
-    return 0;
+    return 1;
 }
 
 sub _FUNC_CALLBACK {

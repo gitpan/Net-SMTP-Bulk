@@ -1,5 +1,8 @@
 Revision history for Net-SMTP-Bulk
 
+0.05    Sept 08 2013
+        = Fixed default callbacks to being 1
+
 0.04    Sept 08 2013
         = Fixed removal of incorrect thread
 	= Changed callback status codes to be 3 digits, made 1 to be default callback from 0
