@@ -1,5 +1,10 @@
 Revision history for Net-SMTP-Bulk
 
+0.04    Sept 08 2013
+        = Fixed removal of incorrect thread
+	= Changed callback status codes to be 3 digits, made 1 to be default callback from 0
+	= Adjusted reconnect to skip current
+
 0.03    Sept 08 2013
         = Fixed 220 response causing removal of thread
 	= Fixed a few documentation issues

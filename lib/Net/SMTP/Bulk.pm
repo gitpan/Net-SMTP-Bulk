@@ -14,11 +14,11 @@ Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 =head1 VERSION
 
-Version 0.03
+Version 0.04
 
 =cut
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 
 =head1 SYNOPSIS
@@ -50,11 +50,11 @@ Callbacks - You can supply callback functions on certain conditions, these condi
 
 connect_pass,connect_fail,auth_pass,auth_fail,reconnect_pass,reconnect_fail,pass,fail,hang
 
-The callback must return 0 it to follow proper proceedures. You can overwrite the defaults by supplying a different return.
+The callback must return 1 it to follow proper proceedures. You can overwrite the defaults by supplying a different return.
 
-0 - Default
-1 - Remove Thread
-2 - Reconnect
+1 - Default
+101 - Remove Thread
+102 - Reconnect
 
 =head2 new(%options, Hosts=>[\%options2,\%options3])
 
@@ -156,9 +156,11 @@ sub dataend {
     
     $self->{queue_size}=$#{$self->{queue}{ $k->[0] }{ $k->[1] }} if $self->{queue_size} < $#{$self->{queue}{ $k->[0] }{ $k->[1] }};
     
-    $self->_NEXT();
+
     
-    $self->_BULK() if $self->{last}[1] == 0;
+    $self->_BULK() if $self->{last}[1] == $#{ $self->{order} };
+    
+    $self->_NEXT();
 }
 
 sub auth {
@@ -215,7 +217,7 @@ sub auth {
             $self->{auth}{ $k->[0] }{ $k->[1] }=[1,$mech];
             my $r=$self->_FUNC('auth_pass',$self,$k,0,$self->{queue}{ $k->[0] }{ $k->[1] });
             
-            if ($r != 0) {
+            if ($r != 1) {
                 $self->_FUNC_CALLBACK($k,0,$r);
             }
             return 1;
@@ -225,8 +227,8 @@ sub auth {
             #AUTH FAILED
             my $r=$self->_FUNC('auth_fail',$self,$k,0,$self->{queue}{ $k->[0] }{ $k->[1] });
             
-            if ($r == 0) {
-                $self->_FUNC_CALLBACK($k,0,1); #remove thread
+            if ($r == 1) {
+                $self->_FUNC_CALLBACK($k,0,101); #remove thread
             } else {
                 $self->_FUNC_CALLBACK($k,0,$r);    
             }
@@ -252,10 +254,16 @@ sub reconnect{
     my $self=shift;
     my $k=shift||$self->{last}[0];
     
+    
+    $self->{fh}{ $k->[0] }{ $k->[1] }->close() if defined($self->{fh}{ $k->[0] }{ $k->[1] });
+    
     $self->_CONNECT($k);
     if ( $self->{auth}{ $k->[0] }{ $k->[1] }[0] == 1 ) {
         $self->{auth}{ $k->[0] }{ $k->[1] }[0]=0;
         my $auth=$self->auth($self->{auth}{ $k->[0] }{ $k->[1] }[1],'','',$k);
+        
+        $self->{order}[ $self->{last}[1] ][2]=2;
+        
         
         return 1 if $auth == 1;
     }
@@ -285,7 +293,7 @@ sub _BULK {
                     no strict;
                     my $r=$self->_FUNC('pass',$self,$k,$q,$self->{queue}{ $k->[0] }{ $k->[1] });
                     
-                    if ($r != 0) {
+                    if ($r != 1) {
                         $self->_FUNC_CALLBACK($k,$q,$r);
                     }
                     
@@ -295,9 +303,9 @@ sub _BULK {
                         
                         my $r=$self->_FUNC('hang',$self,$k,$q,$self->{queue}{ $k->[0] }{ $k->[1] });
                         
-                        if ($r == 0) {
+                        if ($r == 1) {
                             #reconnect
-                            $self->_FUNC_CALLBACK($k,$q,2);
+                            $self->_FUNC_CALLBACK($k,$q,102);
  
                         } else {
                             $self->_FUNC_CALLBACK($k,$q,$r);
@@ -307,7 +315,7 @@ sub _BULK {
                         #error
                         my $r=$self->_FUNC('fail',$self,$k,$q,$self->{queue}{ $k->[0] }{ $k->[1] });
                         
-                        if ($r != 0) {
+                        if ($r != 1) {
                             $self->_FUNC_CALLBACK($k,$q,$r);
                         }
                         
@@ -322,8 +330,10 @@ sub _BULK {
     
         
     }
-    foreach my $k (@{$self->{order}}) {
-    $self->{queue}{ $k->[0] }{ $k->[1] }=[];
+    foreach my $order (0..$#{$self->{order}}) {
+        my $k=$self->{order}[$order];
+        $self->{order}[ $order ][2]=1 if $self->{order}[ $order ][2] == 2;
+        $self->{queue}{ $k->[0] }{ $k->[1] }=[];
     }
     
 }
@@ -332,7 +342,7 @@ sub _FUNC {
     my $self=shift;
     no strict;
     my $func=shift;
-    return &{$func}(@_) if exists($self->{func}{$func});
+    return &{$self->{func}{$func}}(@_) if exists($self->{func}{$func});
     return 0;
 }
 
@@ -342,12 +352,12 @@ sub _FUNC_CALLBACK {
     my $q=shift;
     my $r=shift;
     
-    if ($r == 1) {
+    if ($r == 101) {
         #remove thread
         $self->{order}[ $self->{last}[1] ][2]=0;
         $self->{last}=[ $self->{order}[ $self->{last}[1] ], $self->{last}[1] ];
         $self->_DEBUG($k,'++REMOVE THREAD++') if $self->{debug} == 1;
-    } elsif ($r == 2) {
+    } elsif ($r == 102) {
         #reconnect
         $self->_DEBUG($k,'++RECONNECT++') if $self->{debug} == 1;
         my $reconnect=$self->reconnect($k);
@@ -356,8 +366,8 @@ sub _FUNC_CALLBACK {
         } else {
             my $r2=$self->_FUNC('reconnect_fail',$self,$k,$q,$self->{queue}{ $k->[0] }{ $k->[1] });
                                 
-            if ($r2 == 0) {
-                $self->_FUNC_CALLBACK($k,0,1); #remove thread
+            if ($r2 == 1) {
+                $self->_FUNC_CALLBACK($k,0,101); #remove thread
             } else {
                 $self->_FUNC_CALLBACK($k,0,$r2);
             }
@@ -426,7 +436,7 @@ sub _CONNECT {
             if ($self->{status_code}{ $k->[0] }{ $k->[1] } == 220) {
                 my $r=$self->_FUNC('connect_pass',$self,$k,0,$self->{queue}{ $k->[0] }{ $k->[1] });
                 
-                if ($r != 0) {
+                if ($r != 1) {
                     $self->_FUNC_CALLBACK($k,0,$r);
                 }
                 
@@ -434,8 +444,8 @@ sub _CONNECT {
                 #FAIL TO CONNECT
                 my $r=$self->_FUNC('connect_fail',$self,$k,0,$self->{queue}{ $k->[0] }{ $k->[1] });
                 
-                if ($r == 0) {
-                    $self->_FUNC_CALLBACK($k,0,1); #remove thread
+                if ($r == 1) {
+                    $self->_FUNC_CALLBACK($k,0,101); #remove thread
                 } else {
                     $self->_FUNC_CALLBACK($k,0,$r);
                 }
@@ -459,11 +469,12 @@ sub _NEXT {
     
     while (!exists($next[0])) {
         $self->{last}[1]++;
-        if (exists($self->{order}[ $self->{last}[1] ])) {
-            @next=( $self->{order}[ $self->{last}[1] ], $self->{last}[1] ) if $self->{order}[ $self->{last}[1] ][2]==1;
+        if (exists($self->{order}[ $self->{last}[1] ]) and $self->{order}[ $self->{last}[1] ][2]==1) {
+            @next=( $self->{order}[ $self->{last}[1] ], $self->{last}[1] );
         } else {
             @next=($self->{order}[0],0);    
         }
+        
     }
     
     
@@ -587,7 +598,7 @@ sub _DEBUG {
 
 =head1 AUTHOR
 
-KnowZero, C<< <knowzerox at yahoo.com> >>
+KnowZero
 
 =head1 BUGS
 

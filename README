@@ -2,7 +2,7 @@ NAME
     Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 VERSION
-    Version 0.03
+    Version 0.04
 
 SYNOPSIS
     This is a rewrite of Net::SMTP using AnyEvent and Coro as a backbone. It
@@ -34,10 +34,10 @@ SUBROUTINES/METHODS
     connect_pass,connect_fail,auth_pass,auth_fail,reconnect_pass,reconnect_f
     ail,pass,fail,hang
 
-    The callback must return 0 it to follow proper proceedures. You can
+    The callback must return 1 it to follow proper proceedures. You can
     overwrite the defaults by supplying a different return.
 
-    0 - Default 1 - Remove Thread 2 - Reconnect
+    1 - Default 101 - Remove Thread 102 - Reconnect
 
   new(%options, Hosts=>[\%options2,\%options3])
     You can supply multiple hosts in an array.
@@ -52,7 +52,7 @@ SUBROUTINES/METHODS
   reconnect(  )
   quit(  )
 AUTHOR
-    KnowZero, `<knowzerox at yahoo.com>'
+    KnowZero
 
 BUGS
     Please report any bugs or feature requests to `bug-net-smtp-bulk at
