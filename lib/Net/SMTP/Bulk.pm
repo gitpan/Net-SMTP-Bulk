@@ -14,11 +14,11 @@ Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 =head1 VERSION
 
-Version 0.05
+Version 0.06
 
 =cut
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 
 =head1 SYNOPSIS
@@ -40,10 +40,15 @@ See Net::SMTP for syntax.
 
 Options:
 Host - Hostname or IP address
+
 Port - The port to which to connect to on the server (default: 25)
+
 Hello - The domain name you wish to connect to (default: [same as server])
+
 Debug - Debug information (off: 0, on: 1) (default: 0 [disabled]) OPTIONAL
+
 Secure - If you wish to use a secure connection. (0 - None, 1 - SSL [no verify]) OPTIONAL [Requires Net::SSLeay]
+
 Threads - How many concurrent connections per host (default: 2) OPTIONAL
 
 Callbacks - You can supply callback functions on certain conditions, these conditions include:
@@ -53,7 +58,9 @@ connect_pass,connect_fail,auth_pass,auth_fail,reconnect_pass,reconnect_fail,pass
 The callback must return 1 it to follow proper proceedures. You can overwrite the defaults by supplying a different return.
 
 1 - Default
+
 101 - Remove Thread
+
 102 - Reconnect
 
 =head2 new(%options, Hosts=>[\%options2,\%options3])
@@ -62,6 +69,7 @@ You can supply multiple hosts in an array.
 
 
 =head2 auth( [ MECHANISM,] USERNAME, PASSWORD  )
+
 *Requires Authen::SASL
 
 =head2 mail( ADDRESS )
@@ -593,7 +601,8 @@ sub _WRITE {
 sub _DEBUG {
     my $self=shift;
     my $k=shift;
-    print '['.$k->[0].':'.$k->[1].'] '.shift."\n";
+    my $str=shift||'';
+    print '['.$k->[0].':'.$k->[1].'] '.$str."\n";
 }
 
 =head1 AUTHOR

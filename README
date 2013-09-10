@@ -2,7 +2,7 @@ NAME
     Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 VERSION
-    Version 0.05
+    Version 0.06
 
 SYNOPSIS
     This is a rewrite of Net::SMTP using AnyEvent and Coro as a backbone. It
@@ -20,13 +20,20 @@ SYNOPSIS
 SUBROUTINES/METHODS
   new($server,%options)
   new(%options)
-    Options: Host - Hostname or IP address Port - The port to which to
-    connect to on the server (default: 25) Hello - The domain name you wish
-    to connect to (default: [same as server]) Debug - Debug information
-    (off: 0, on: 1) (default: 0 [disabled]) OPTIONAL Secure - If you wish to
-    use a secure connection. (0 - None, 1 - SSL [no verify]) OPTIONAL
-    [Requires Net::SSLeay] Threads - How many concurrent connections per
-    host (default: 2) OPTIONAL
+    Options: Host - Hostname or IP address
+
+    Port - The port to which to connect to on the server (default: 25)
+
+    Hello - The domain name you wish to connect to (default: [same as
+    server])
+
+    Debug - Debug information (off: 0, on: 1) (default: 0 [disabled])
+    OPTIONAL
+
+    Secure - If you wish to use a secure connection. (0 - None, 1 - SSL [no
+    verify]) OPTIONAL [Requires Net::SSLeay]
+
+    Threads - How many concurrent connections per host (default: 2) OPTIONAL
 
     Callbacks - You can supply callback functions on certain conditions,
     these conditions include:
@@ -37,13 +44,18 @@ SUBROUTINES/METHODS
     The callback must return 1 it to follow proper proceedures. You can
     overwrite the defaults by supplying a different return.
 
-    1 - Default 101 - Remove Thread 102 - Reconnect
+    1 - Default
+
+    101 - Remove Thread
+
+    102 - Reconnect
 
   new(%options, Hosts=>[\%options2,\%options3])
     You can supply multiple hosts in an array.
 
   auth( [ MECHANISM,] USERNAME, PASSWORD  )
-*Requires Authen::SASL
+    *Requires Authen::SASL
+
   mail( ADDRESS )
   to( ADDRESS )
   data()

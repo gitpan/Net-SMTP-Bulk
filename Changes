@@ -1,5 +1,8 @@
 Revision history for Net-SMTP-Bulk
 
+0.06    Sept 10 2013
+        = Fixed to work with Perl 5.10 and below.
+
 0.05    Sept 08 2013
         = Fixed default callbacks to being 1
 
