@@ -14,11 +14,11 @@ Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 =head1 VERSION
 
-Version 0.06
+Version 0.07
 
 =cut
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 
 =head1 SYNOPSIS
@@ -567,15 +567,12 @@ sub _READ {
     
     my $str;
     my $waitcount=0;
-    do {
-    $str=$self->{fh}{ $k->[0] }{ $k->[1] }->readline();
-    $waitcount++;
-    Coro::AnyEvent::sleep 1 if $waitcount % 2 == 0;
-    $str='' if $waitcount >= 5;
-    } while(!defined($str));
-    
-    
-    
+
+    if ($self->{fh}{ $k->[0] }{ $k->[1] }->readable()) {
+        $self->{fh}{ $k->[0] }{ $k->[1] }->readline();
+    }
+
+ 
     if (defined($str) and $str=~m/^((\d{3}).(.*?))[\r\n]+?$/) {
         $self->_DEBUG($k,$1) if $self->{debug}==1;
         $self->{buffer}{ $k->[0] }{ $k->[1] }=$1;

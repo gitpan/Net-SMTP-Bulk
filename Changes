@@ -1,25 +1,36 @@
-Revision history for Net-SMTP-Bulk
+Revision history for Perl module Net::SMTP::Bulk
 
-0.06    Sept 10 2013
-        = Fixed to work with Perl 5.10 and below.
+0.07 2013-09-12
 
-0.05    Sept 08 2013
-        = Fixed default callbacks to being 1
+    - Made it work faster(especially on longer response servers) and more efficient by removing coro sleep in favor of readable on the handle
 
-0.04    Sept 08 2013
-        = Fixed removal of incorrect thread
-	= Changed callback status codes to be 3 digits, made 1 to be default callback from 0
-	= Adjusted reconnect to skip current
+0.06 2013-09-10
 
-0.03    Sept 08 2013
-        = Fixed 220 response causing removal of thread
-	= Fixed a few documentation issues
+    - Fixed to work with Perl 5.10 and below
 
-0.02    Sept 08 2013
-        = Fixed <CR><LF>.<CR><LF>
-	= Fixed Remove Thread
-	= Fixed pass callbacks
+0.05 2013-09-08
 
-0.01    Sept 07 2013
-        = First version, released on an unsuspecting world.
+    - Fixed default callbacks to being 1
+
+0.04 2013-09-08
+
+    - Fixed removal of incorrect thread
+    - Changed callback status codes to be 3 digits,
+      made 1 to be default callback from 0
+    - Adjusted reconnect to skip current
+
+0.03 2013-09-08
+
+    - Fixed 220 response causing removal of thread
+    - Fixed a few documentation issues
+
+0.02 2013-09-08
+
+    - Fixed <CR><LF>.<CR><LF>
+    - Fixed Remove Thread
+    - Fixed pass callbacks
+
+0.01 2013-09-07
+
+    - First version, released on an unsuspecting world.
 
