@@ -14,11 +14,11 @@ Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 =head1 VERSION
 
-Version 0.08
+Version 0.09
 
 =cut
 
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 
 
 =head1 SYNOPSIS
@@ -271,6 +271,9 @@ sub reconnect{
     $self->{fh}{ $k->[0] }{ $k->[1] }->close() if defined($self->{fh}{ $k->[0] }{ $k->[1] });
     
     $self->_CONNECT($k);
+    $self->_HELO($k);
+    $self->_READ($k);
+    $self->_HEADER($k);
     if ( $self->{auth}{ $k->[0] }{ $k->[1] }[0] == 1 ) {
         $self->{auth}{ $k->[0] }{ $k->[1] }[0]=0;
         my $auth=$self->auth($self->{auth}{ $k->[0] }{ $k->[1] }[1],'','',$k);
@@ -431,7 +434,13 @@ sub _PREPARE {
             
             $self->_CONNECT([$new{Host},$t]);
 
-            
+        }
+        foreach my $t ( 0..$self->{threads}{ $new{Host} } ) {
+            $self->_HELO([$new{Host},$t]);
+        }
+        foreach my $t ( 0..$self->{threads}{ $new{Host} } ) {
+            $self->_READ([$new{Host},$t]);
+            $self->_HEADER([$new{Host},$t]);
         }
     
     }
@@ -456,6 +465,14 @@ sub _CONNECT {
     
 
 
+   
+    
+}
+
+sub _HELO {
+    my $self=shift;
+    my $k=shift;
+    
             $self->_READ($k);
             
             if ($self->{status_code}{ $k->[0] }{ $k->[1] } == 220) {
@@ -479,10 +496,7 @@ sub _CONNECT {
             }
             
             $self->_WRITE($k,'EHLO '.$self->{helo}{ $k->[0] });
-
-            $self->_READ($k);
-            $self->_HEADER($k);
-    
+   
     
 }
 

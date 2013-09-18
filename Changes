@@ -1,5 +1,9 @@
 Revision history for Perl module Net::SMTP::Bulk
 
+0.09 2013-09-19
+
+    - Added parallel connect 
+
 0.08 2013-09-18
 
     - Fixed auto remove thread issue
