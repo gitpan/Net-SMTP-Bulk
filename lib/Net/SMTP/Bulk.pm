@@ -14,11 +14,11 @@ Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 =head1 VERSION
 
-Version 0.07
+Version 0.08
 
 =cut
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 
 =head1 SYNOPSIS
@@ -103,7 +103,8 @@ sub new {
     bless($self, $class||'Net::SMTP::Bulk');
  
 
-    $self->{debug} = (($new{Debug}||0) == 1) ? 1:0;
+    $self->{debug} = (($new{Debug}||0) >= 1) ? int($new{Debug}):0;
+    $self->{debug_path} = $new{DebugPath}||'debug_[HOST]_[THREAD].txt';
     $self->{func} = $new{Callbacks};
     $self->{defaults}={
                        threads=>$new{Threads},
@@ -255,6 +256,10 @@ sub quit {
     my $self=shift;
     
     $self->_BULK();
+    
+    foreach my $dfh ( keys(%{ $self->{debug_fh} }) ) {
+        close($self->{debug_fh}{$dfh})
+    }
 }
 
 
@@ -364,13 +369,17 @@ sub _FUNC_CALLBACK {
         #remove thread
         $self->{order}[ $self->{last}[1] ][2]=0;
         $self->{last}=[ $self->{order}[ $self->{last}[1] ], $self->{last}[1] ];
-        $self->_DEBUG($k,'++REMOVE THREAD++') if $self->{debug} == 1;
+        $self->_DEBUG($k,'++REMOVE THREAD++') if $self->{debug} >= 1;
     } elsif ($r == 102) {
         #reconnect
-        $self->_DEBUG($k,'++RECONNECT++') if $self->{debug} == 1;
+        $self->_DEBUG($k,'++RECONNECT++') if $self->{debug} >= 1;
         my $reconnect=$self->reconnect($k);
         if ($reconnect == 1) {
             my $r2=$self->_FUNC('reconnect_pass',$self,$k,$q,$self->{queue}{ $k->[0] }{ $k->[1] });
+            
+            if ($r2 != 1) {
+                $self->_FUNC_CALLBACK($k,0,$r2);
+            }
         } else {
             my $r2=$self->_FUNC('reconnect_fail',$self,$k,$q,$self->{queue}{ $k->[0] }{ $k->[1] });
                                 
@@ -407,6 +416,14 @@ sub _PREPARE {
         $self->{queue_size}=-1;
        
         foreach my $t ( 0..$self->{threads}{ $new{Host} } ) {
+            if ($self->{debug} == 2) {
+                my $path=''.$self->{debug_path};
+                $path=~s/\[HOST\]/$new{Host}/gs;
+                $path=~s/\[THREAD\]/$t/gs;
+                open( $self->{debug_fh}{ $new{Host}.':'.$t } , '>>'.$path );
+            }
+
+            
             $self->{auth}{ $new{Host} }{$t}=[0,''];
             $self->{queue}{ $new{Host} }{$t}=[];
             
@@ -498,7 +515,7 @@ sub _SECURE {
     
     my $sel = IO::Select->new($sock); # wait until it connected
     if ($sel->can_write) {
-        $self->_DEBUG($k,'IO::Socket::INET connected') if $self->{debug} == 1;
+        $self->_DEBUG($k,'IO::Socket::INET connected') if $self->{debug} >= 1;
     }
     
     my %extra;
@@ -512,11 +529,11 @@ sub _SECURE {
 
     while (1) {
         if ($sock->connect_SSL) { # will not block
-            $self->_DEBUG($k,'IO::Socket::SSL connected') if $self->{debug} == 1;
+            $self->_DEBUG($k,'IO::Socket::SSL connected') if $self->{debug} >= 1;
             last;
         }
         else { # handshake still incomplete
-            $self->_DEBUG($k,'IO::Socket::SSL not connected yet') if $self->{debug} == 1;
+            $self->_DEBUG($k,'IO::Socket::SSL not connected yet') if $self->{debug} >= 1;
             if ( IO::Socket::SSL->want_read() ) {
                 $sel->can_read;
             }
@@ -524,7 +541,7 @@ sub _SECURE {
                 $sel->can_write;
             }
             else {
-               $self->_DEBUG($k,'IO::Socket::SSL unknown error: '. $IO::Socket::SSL::SSL_ERROR) if $self->{debug} == 1;
+               $self->_DEBUG($k,'IO::Socket::SSL unknown error: '. $IO::Socket::SSL::SSL_ERROR) if $self->{debug} >= 1;
                #SSL ERROR
             }
         }
@@ -553,7 +570,7 @@ sub _HEADER {
 
     foreach my $line (split/[\r\n]+/,$$buf) {
         $line=~m/^((\d{3})[ \-](\w+?)(?: (.*?)|)[\r\n]*?)$/is;
-        $self->_DEBUG($k,$1) if $self->{debug}==1;
+        $self->_DEBUG($k,$1) if $self->{debug} >= 1;
         my $status = lc($2);
         my $head = lc($3);
         $self->{header}{ $k->[0] }{ $k->[1] }{$head}=[split/ /,($4||'')];
@@ -569,12 +586,12 @@ sub _READ {
     my $waitcount=0;
 
     if ($self->{fh}{ $k->[0] }{ $k->[1] }->readable()) {
-        $self->{fh}{ $k->[0] }{ $k->[1] }->readline();
+        $str=$self->{fh}{ $k->[0] }{ $k->[1] }->readline();
     }
 
  
     if (defined($str) and $str=~m/^((\d{3}).(.*?))[\r\n]+?$/) {
-        $self->_DEBUG($k,$1) if $self->{debug}==1;
+        $self->_DEBUG($k,$1) if $self->{debug} >= 1;
         $self->{buffer}{ $k->[0] }{ $k->[1] }=$1;
         $self->{status_code}{ $k->[0] }{ $k->[1] }=$2;
         $self->{status_text}{ $k->[0] }{ $k->[1] }=$3;
@@ -591,7 +608,7 @@ sub _WRITE {
     my $k=shift;
     my $str=shift;
     $str=~s/[\r\n]+?$//s;
-    $self->_DEBUG($k,'>>'.$str) if $self->{debug}==1;
+    $self->_DEBUG($k,'>>'.$str) if $self->{debug} >= 1;
     $self->{fh}{ $k->[0] }{ $k->[1] }->print($str."\r\n");
 }
 
@@ -599,7 +616,11 @@ sub _DEBUG {
     my $self=shift;
     my $k=shift;
     my $str=shift||'';
-    print '['.$k->[0].':'.$k->[1].'] '.$str."\n";
+    if ($self->{debug} == 1) {
+        print '['.$k->[0].':'.$k->[1].'] '.$str."\n";
+    } else {
+        print { $self->{debug_fh}{ $k->[0].':'.$k->[1] }  } '['.$k->[0].':'.$k->[1].'] '.$str."\n";
+    }
 }
 
 =head1 AUTHOR

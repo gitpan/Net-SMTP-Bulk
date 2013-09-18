@@ -1,5 +1,11 @@
 Revision history for Perl module Net::SMTP::Bulk
 
+0.08 2013-09-18
+
+    - Fixed auto remove thread issue
+    - Added Debug=2 and DebugPath for writing debug data to files
+    - added missing reconnect_pass callback response
+
 0.07 2013-09-12
 
     - Made it work faster(especially on longer response servers) and more efficient by removing coro sleep in favor of readable on the handle
