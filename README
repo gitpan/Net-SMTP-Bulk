@@ -2,7 +2,7 @@ NAME
     Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 VERSION
-    Version 0.09
+    Version 0.10
 
 SYNOPSIS
     This is a rewrite of Net::SMTP using AnyEvent and Coro as a backbone. It

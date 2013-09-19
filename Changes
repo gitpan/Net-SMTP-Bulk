@@ -1,6 +1,10 @@
 Revision history for Perl module Net::SMTP::Bulk
 
-0.09 2013-09-19
+0.10 2013-09-19
+
+    - Added parallel ssl connect 
+
+0.09 2013-09-18
 
     - Added parallel connect 
 

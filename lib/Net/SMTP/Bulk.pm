@@ -14,11 +14,11 @@ Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 =head1 VERSION
 
-Version 0.09
+Version 0.10
 
 =cut
 
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 
 
 =head1 SYNOPSIS
@@ -271,6 +271,7 @@ sub reconnect{
     $self->{fh}{ $k->[0] }{ $k->[1] }->close() if defined($self->{fh}{ $k->[0] }{ $k->[1] });
     
     $self->_CONNECT($k);
+    $self->_SECURECHECK();
     $self->_HELO($k);
     $self->_READ($k);
     $self->_HEADER($k);
@@ -435,6 +436,9 @@ sub _PREPARE {
             $self->_CONNECT([$new{Host},$t]);
 
         }
+        
+        $self->_SECURECHECK();
+        
         foreach my $t ( 0..$self->{threads}{ $new{Host} } ) {
             $self->_HELO([$new{Host},$t]);
         }
@@ -524,10 +528,11 @@ sub _SECURE {
     my $self=shift;
     my $k=shift;
     my $sock=shift;
-    
+    $self->{secure_sock}{ $k->[0] }{ $k->[1] }=$sock;    
     require IO::Socket::SSL;
     
     my $sel = IO::Select->new($sock); # wait until it connected
+    $self->{secure_sel}{ $k->[0] }{ $k->[1] }=$sel;
     if ($sel->can_write) {
         $self->_DEBUG($k,'IO::Socket::INET connected') if $self->{debug} >= 1;
     }
@@ -540,7 +545,7 @@ sub _SECURE {
     
 
     IO::Socket::SSL->start_SSL($sock, %extra, SSL_startHandshake => 0);
-
+=head2
     while (1) {
         if ($sock->connect_SSL) { # will not block
             $self->_DEBUG($k,'IO::Socket::SSL connected') if $self->{debug} >= 1;
@@ -560,7 +565,45 @@ sub _SECURE {
             }
         }
     }
-    
+=cut    
+}
+
+
+sub _SECURECHECK {
+    my $self=shift;
+    if (exists($self->{secure_sel})) {
+        while (1) {
+     
+            foreach my $h ( keys(%{$self->{secure_sel}}) ) {
+                foreach my $t ( keys(%{$self->{secure_sel}{$h}}) ) {
+                    my $sock=$self->{secure_sock}{$h}{$t};
+                    my $sel=$self->{secure_sel}{$h}{$t};
+            
+                    if ($sock->connect_SSL) { # will not block
+                        $self->_DEBUG([$h,$t],'IO::Socket::SSL connected') if $self->{debug} >= 1;
+                        delete($self->{secure_sel}{$h}{$t});
+                    } else { # handshake still incomplete
+                        $self->_DEBUG([$h,$t],'IO::Socket::SSL not connected yet') if $self->{debug} >= 1;
+                        if ( $sock->want_read() ) {
+                            $sel->can_read;
+                        } elsif ( $sock->want_write()) {
+                            $sel->can_write;
+                        } else {
+                            $self->_DEBUG([$h,$t],'IO::Socket::SSL unknown error: '. $sock->errstr()) if $self->{debug} >= 1;
+                            #SSL ERROR
+                        }
+                    }
+                }
+                if ( keys(%{$self->{secure_sel}{$h}}) == 0  ) {
+                    delete($self->{secure_sel}{$h});  
+                }
+            }
+            if (  keys(%{$self->{secure_sel}}) == 0  ) {
+                delete($self->{secure_sel});
+                last;  
+            }
+        }    
+    }
 }
 
 sub _HEADER {
