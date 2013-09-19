@@ -14,11 +14,11 @@ Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 =head1 VERSION
 
-Version 0.10
+Version 0.11
 
 =cut
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 
 =head1 SYNOPSIS
@@ -59,9 +59,17 @@ The callback must return 1 it to follow proper proceedures. You can overwrite th
 
 1 - Default
 
-101 - Remove Thread
+101 - Remove Thread permanently
 
-102 - Reconnect
+102 - Remove thread temporarily and reconnect at end of batch
+
+103 - Remove thread temporarily and restart at end of batch (If your using an SMTP server with short timeout, it is suggested to use this over reconnect)
+
+104 - Remove Thread temporarily
+
+202 - Reconnect now
+
+203 - Restart now
 
 =head2 new(%options, Hosts=>[\%options2,\%options3])
 
@@ -97,17 +105,15 @@ sub new {
         $new{Host}=shift;
     }
 
-    $new{Threads}||=2;
-    $new{Threads}--;
     
     bless($self, $class||'Net::SMTP::Bulk');
  
-
+    $self->{new}=\%new;
     $self->{debug} = (($new{Debug}||0) >= 1) ? int($new{Debug}):0;
     $self->{debug_path} = $new{DebugPath}||'debug_[HOST]_[THREAD].txt';
     $self->{func} = $new{Callbacks};
     $self->{defaults}={
-                       threads=>$new{Threads},
+                       threads=>$new{Threads}||2,
                        port=>$new{Port}||25,
                        timeout=>$new{Timeout}||30,
                        secure=>$new{Secure}||0
@@ -301,7 +307,9 @@ sub _BULK {
  
         }
 
-        foreach my $k (@{$self->{order}}) {
+        foreach my $order (0..$#{$self->{order}}) {
+            my $k=$self->{order}[$order];
+            
             if ($k->[2] == 1 and exists($self->{queue}{ $k->[0] }{ $k->[1] }[$q])) {
                 $self->_READ($k);
                 
@@ -347,10 +355,22 @@ sub _BULK {
     
         
     }
+    
+    
+
+        if (exists($self->{callback})) {
+            foreach my $i (0..$#{$self->{callback}}) {
+               $self->_FUNC_CALLBACK(@{$self->{callback}[$i]} );
+            }
+            delete($self->{callback});
+        }
+    
+    
     foreach my $order (0..$#{$self->{order}}) {
         my $k=$self->{order}[$order];
         $self->{order}[ $order ][2]=1 if $self->{order}[ $order ][2] == 2;
         $self->{queue}{ $k->[0] }{ $k->[1] }=[];
+
     }
     
 }
@@ -371,11 +391,24 @@ sub _FUNC_CALLBACK {
     
     if ($r == 101) {
         #remove thread
-        $self->{order}[ $self->{last}[1] ][2]=0;
-        $self->{last}=[ $self->{order}[ $self->{last}[1] ], $self->{last}[1] ];
         $self->_DEBUG($k,'++REMOVE THREAD++') if $self->{debug} >= 1;
+        $k->[2]=0;
     } elsif ($r == 102) {
-        #reconnect
+        #temp remove thread and reconnect in the end
+        $self->_DEBUG($k,'++REMOVE THREAD++') if $self->{debug} >= 1;
+        $k->[2]=2;
+        push(@{$self->{callback}},[$k,$q,202]);
+    } elsif ($r == 103) {
+        #temp remove thread and restart in the end
+        $self->_DEBUG($k,'++REMOVE THREAD++') if $self->{debug} >= 1;
+        $k->[2]=2;
+        push(@{$self->{callback}},[$k,$q,203]);
+    } elsif ($r == 104) {
+        #temp remove thread
+        $self->_DEBUG($k,'++REMOVE THREAD++') if $self->{debug} >= 1;
+        $k->[2]=2;
+    } elsif ($r == 202) {
+        #reconnect now
         $self->_DEBUG($k,'++RECONNECT++') if $self->{debug} >= 1;
         my $reconnect=$self->reconnect($k);
         if ($reconnect == 1) {
@@ -394,6 +427,11 @@ sub _FUNC_CALLBACK {
             }
                                 
         }
+    } elsif ($r == 203) {
+        #restart now
+        $self->_DEBUG($k,'++RESTART++') if $self->{debug} >= 1;
+        $self=Net::SMTP::Bulk->new(%{$self->{new}});
+        
     }
     
     
@@ -416,7 +454,7 @@ sub _PREPARE {
         $self->{port}{ $new{Host} }||=$new{Port}||$self->{defaults}{port};
         $self->{helo}{ $new{Host} }=$new{Hello}||$self->{host}{ $new{Host} };
         $self->{timeout}{ $new{Host} }=$new{Timeout}||$self->{defaults}{timeout};
-        $self->{threads}{ $new{Host} }=$new{Threads}||$self->{defaults}{threads};
+        $self->{threads}{ $new{Host} }=($new{Threads}||$self->{defaults}{threads}) - 1;
         $self->{queue_size}=-1;
        
         foreach my $t ( 0..$self->{threads}{ $new{Host} } ) {
@@ -512,11 +550,16 @@ sub _NEXT {
     
     while (!exists($next[0])) {
         $self->{last}[1]++;
-        if (exists($self->{order}[ $self->{last}[1] ]) and $self->{order}[ $self->{last}[1] ][2]==1) {
-            @next=( $self->{order}[ $self->{last}[1] ], $self->{last}[1] );
+        
+        if (exists($self->{order}[ $self->{last}[1] ])) {
+            if ($self->{order}[ $self->{last}[1] ][2]==1) {
+                @next=( $self->{order}[ $self->{last}[1] ], $self->{last}[1] );
+            }
         } else {
-            @next=($self->{order}[0],0);    
+              @next=($self->{order}[0],0);    
         }
+        
+ 
         
     }
     
@@ -576,23 +619,8 @@ sub _SECURECHECK {
      
             foreach my $h ( keys(%{$self->{secure_sel}}) ) {
                 foreach my $t ( keys(%{$self->{secure_sel}{$h}}) ) {
-                    my $sock=$self->{secure_sock}{$h}{$t};
-                    my $sel=$self->{secure_sel}{$h}{$t};
-            
-                    if ($sock->connect_SSL) { # will not block
-                        $self->_DEBUG([$h,$t],'IO::Socket::SSL connected') if $self->{debug} >= 1;
-                        delete($self->{secure_sel}{$h}{$t});
-                    } else { # handshake still incomplete
-                        $self->_DEBUG([$h,$t],'IO::Socket::SSL not connected yet') if $self->{debug} >= 1;
-                        if ( $sock->want_read() ) {
-                            $sel->can_read;
-                        } elsif ( $sock->want_write()) {
-                            $sel->can_write;
-                        } else {
-                            $self->_DEBUG([$h,$t],'IO::Socket::SSL unknown error: '. $sock->errstr()) if $self->{debug} >= 1;
-                            #SSL ERROR
-                        }
-                    }
+                    $self->_SECURECHECK_PROCESS([$h,$t],$self->{secure_sock}{$h}{$t},$self->{secure_sel}{$h}{$t} );
+
                 }
                 if ( keys(%{$self->{secure_sel}{$h}}) == 0  ) {
                     delete($self->{secure_sel}{$h});  
@@ -604,6 +632,30 @@ sub _SECURECHECK {
             }
         }    
     }
+}
+
+sub _SECURECHECK_PROCESS {
+    my $self=shift;
+    my $k=shift;    
+    my $sock=shift;
+    my $sel=shift;
+
+    
+    if ($sock->connect_SSL) { # will not block
+        $self->_DEBUG($k,'IO::Socket::SSL connected') if $self->{debug} >= 1;
+        delete($self->{secure_sel}{$k->[0]}{$k->[1]});
+    } else { # handshake still incomplete
+        $self->_DEBUG($k,'IO::Socket::SSL not connected yet') if $self->{debug} >= 1;
+        if ( $sock->want_read() ) {
+            $sel->can_read;
+        } elsif ( $sock->want_write()) {
+            $sel->can_write;
+        } else {
+            $self->_DEBUG($k,'IO::Socket::SSL unknown error: '. $sock->errstr()) if $self->{debug} >= 1;
+                            #SSL ERROR
+        }
+    }
+    
 }
 
 sub _HEADER {

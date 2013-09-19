@@ -2,7 +2,7 @@ NAME
     Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 VERSION
-    Version 0.10
+    Version 0.11
 
 SYNOPSIS
     This is a rewrite of Net::SMTP using AnyEvent and Coro as a backbone. It
@@ -46,9 +46,19 @@ SUBROUTINES/METHODS
 
     1 - Default
 
-    101 - Remove Thread
+    101 - Remove Thread permanently
 
-    102 - Reconnect
+    102 - Remove thread temporarily and reconnect at end of batch
+
+    103 - Remove thread temporarily and restart at end of batch (If your
+    using an SMTP server with short timeout, it is suggested to use this
+    over reconnect)
+
+    104 - Remove Thread temporarily
+
+    202 - Reconnect now
+
+    203 - Restart now
 
   new(%options, Hosts=>[\%options2,\%options3])
     You can supply multiple hosts in an array.

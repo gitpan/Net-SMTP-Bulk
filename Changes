@@ -1,5 +1,11 @@
 Revision history for Perl module Net::SMTP::Bulk
 
+0.11 2013-09-19
+
+    - Changed 102 to be delayed reconnect callback response, 202 for reconnect now
+    - Added delayed restart callback response 103, 203 for restart now (restart will close all connections and restart)
+    - Fixed remove thread to function correctly and added 104, remove thread temporarily
+
 0.10 2013-09-19
 
     - Added parallel ssl connect 
