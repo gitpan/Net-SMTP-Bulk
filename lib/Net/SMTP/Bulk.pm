@@ -14,11 +14,11 @@ Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 =head1 VERSION
 
-Version 0.11
+Version 0.12
 
 =cut
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 
 =head1 SYNOPSIS
@@ -359,8 +359,8 @@ sub _BULK {
     
 
         if (exists($self->{callback})) {
-            foreach my $i (0..$#{$self->{callback}}) {
-               $self->_FUNC_CALLBACK(@{$self->{callback}[$i]} );
+            foreach my $call (keys(%{$self->{callback}})) {
+               $self->_FUNC_CALLBACK(@{$self->{callback}{$call}} );
             }
             delete($self->{callback});
         }
@@ -397,12 +397,12 @@ sub _FUNC_CALLBACK {
         #temp remove thread and reconnect in the end
         $self->_DEBUG($k,'++REMOVE THREAD++') if $self->{debug} >= 1;
         $k->[2]=2;
-        push(@{$self->{callback}},[$k,$q,202]);
+        $self->{callback}{'102:'.$k->[0].':'.$k->[1]}=[$k,$q,202];
     } elsif ($r == 103) {
         #temp remove thread and restart in the end
         $self->_DEBUG($k,'++REMOVE THREAD++') if $self->{debug} >= 1;
         $k->[2]=2;
-        push(@{$self->{callback}},[$k,$q,203]);
+        $self->{callback}{'103'}=[$k,$q,203];
     } elsif ($r == 104) {
         #temp remove thread
         $self->_DEBUG($k,'++REMOVE THREAD++') if $self->{debug} >= 1;

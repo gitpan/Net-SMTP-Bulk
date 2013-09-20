@@ -16,7 +16,7 @@ name: Net-SMTP-Bulk
 provides:
   Net::SMTP::Bulk:
     file: lib/Net/SMTP/Bulk.pm
-    version: 0.11
+    version: 0.12
 recommends:
   Authen::SASL: 0
   IO::Socket::SSL: 0
@@ -26,4 +26,4 @@ requires:
   Coro: 0
 resources:
   license: http://dev.perl.org/licenses/
-version: 0.11
+version: 0.12

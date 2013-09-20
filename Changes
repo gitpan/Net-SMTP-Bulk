@@ -1,5 +1,9 @@
 Revision history for Perl module Net::SMTP::Bulk
 
+0.12 2013-09-19
+
+    - Prevent multiple restarts on multiple fails 
+
 0.11 2013-09-19
 
     - Changed 102 to be delayed reconnect callback response, 202 for reconnect now
