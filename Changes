@@ -1,5 +1,9 @@
 Revision history for Perl module Net::SMTP::Bulk
 
+0.13 2013-09-20
+
+    - Fixed order repeat on restart 
+
 0.12 2013-09-19
 
     - Prevent multiple restarts on multiple fails 

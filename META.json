@@ -39,7 +39,7 @@
    "provides" : {
       "Net::SMTP::Bulk" : {
          "file" : "lib/Net/SMTP/Bulk.pm",
-         "version" : "0.12"
+         "version" : "0.13"
       }
    },
    "release_status" : "stable",
@@ -48,5 +48,5 @@
          "http://dev.perl.org/licenses/"
       ]
    },
-   "version" : "0.12"
+   "version" : "0.13"
 }

@@ -14,11 +14,11 @@ Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 =head1 VERSION
 
-Version 0.12
+Version 0.13
 
 =cut
 
-our $VERSION = '0.12';
+our $VERSION = '0.13';
 
 
 =head1 SYNOPSIS
@@ -105,9 +105,8 @@ sub new {
         $new{Host}=shift;
     }
 
-    
     bless($self, $class||'Net::SMTP::Bulk');
- 
+
     $self->{new}=\%new;
     $self->{debug} = (($new{Debug}||0) >= 1) ? int($new{Debug}):0;
     $self->{debug_path} = $new{DebugPath}||'debug_[HOST]_[THREAD].txt';
@@ -125,7 +124,6 @@ sub new {
     } else {
        $self->_PREPARE([\%new]);
     }
-
 
     return $self;
 }
@@ -266,6 +264,12 @@ sub quit {
     foreach my $dfh ( keys(%{ $self->{debug_fh} }) ) {
         close($self->{debug_fh}{$dfh})
     }
+    foreach my $h ( keys(%{ $self->{fh} }) ) {
+        foreach my $t ( keys(%{ $self->{fh}{$h} }) ) {
+            $self->{fh}{$h}{$t}->close();
+            delete($self->{fh}{$h}{$t});
+        }
+    }
 }
 
 
@@ -360,7 +364,9 @@ sub _BULK {
 
         if (exists($self->{callback})) {
             foreach my $call (keys(%{$self->{callback}})) {
-               $self->_FUNC_CALLBACK(@{$self->{callback}{$call}} );
+                my @callback=@{$self->{callback}{$call}};
+                delete($self->{callback}{$call});
+               $self->_FUNC_CALLBACK( @callback );
             }
             delete($self->{callback});
         }
@@ -391,25 +397,25 @@ sub _FUNC_CALLBACK {
     
     if ($r == 101) {
         #remove thread
-        $self->_DEBUG($k,'++REMOVE THREAD++') if $self->{debug} >= 1;
+        $self->_DEBUG($k,'++REMOVE THREAD PERM(101)++') if $self->{debug} >= 1;
         $k->[2]=0;
     } elsif ($r == 102) {
         #temp remove thread and reconnect in the end
-        $self->_DEBUG($k,'++REMOVE THREAD++') if $self->{debug} >= 1;
+        $self->_DEBUG($k,'++REMOVE THREAD TEMP(102)++') if $self->{debug} >= 1;
         $k->[2]=2;
         $self->{callback}{'102:'.$k->[0].':'.$k->[1]}=[$k,$q,202];
     } elsif ($r == 103) {
         #temp remove thread and restart in the end
-        $self->_DEBUG($k,'++REMOVE THREAD++') if $self->{debug} >= 1;
+        $self->_DEBUG($k,'++REMOVE THREAD TEMP(103)++') if $self->{debug} >= 1;
         $k->[2]=2;
         $self->{callback}{'103'}=[$k,$q,203];
     } elsif ($r == 104) {
         #temp remove thread
-        $self->_DEBUG($k,'++REMOVE THREAD++') if $self->{debug} >= 1;
+        $self->_DEBUG($k,'++REMOVE THREAD TEMP(104)++') if $self->{debug} >= 1;
         $k->[2]=2;
     } elsif ($r == 202) {
         #reconnect now
-        $self->_DEBUG($k,'++RECONNECT++') if $self->{debug} >= 1;
+        $self->_DEBUG($k,'++RECONNECT(202)++') if $self->{debug} >= 1;
         my $reconnect=$self->reconnect($k);
         if ($reconnect == 1) {
             my $r2=$self->_FUNC('reconnect_pass',$self,$k,$q,$self->{queue}{ $k->[0] }{ $k->[1] });
@@ -429,8 +435,23 @@ sub _FUNC_CALLBACK {
         }
     } elsif ($r == 203) {
         #restart now
-        $self->_DEBUG($k,'++RESTART++') if $self->{debug} >= 1;
-        $self=Net::SMTP::Bulk->new(%{$self->{new}});
+        $self->_DEBUG($k,'++RESTART(203)++') if $self->{debug} >= 1;
+        foreach my $dfh ( keys(%{ $self->{debug_fh} }) ) {
+            close($self->{debug_fh}{$dfh})
+        }
+        foreach my $h ( keys(%{ $self->{fh} }) ) {
+            foreach my $t ( keys(%{ $self->{fh}{$h} }) ) {
+                $self->{fh}{$h}{$t}->close();
+                delete($self->{fh}{$h}{$t});
+            }
+        }
+        
+        
+        if (exists($self->{new}{Hosts})) {
+           $self->_PREPARE($self->{new}{Hosts});
+        } else {
+           $self->_PREPARE([$self->{new}]);
+        }
         
     }
     
@@ -440,7 +461,7 @@ sub _FUNC_CALLBACK {
 sub _PREPARE {
     my $self=shift;
     my $hosts=shift;
-    
+    $self->{order}=[];
     foreach my $i ( 0..$#{$hosts} ) {
    
         my %new=( %{$hosts->[$i]} );
