@@ -3,6 +3,7 @@ package Net::SMTP::Bulk;
 use 5.006;
 use strict;
 use warnings FATAL => 'all';
+use Encode;
 use Coro;
 use Coro::Handle;
 use AnyEvent::Socket;
@@ -14,11 +15,11 @@ Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 =head1 VERSION
 
-Version 0.13
+Version 0.14
 
 =cut
 
-our $VERSION = '0.13';
+our $VERSION = '0.14';
 
 
 =head1 SYNOPSIS
@@ -50,6 +51,8 @@ Debug - Debug information (off: 0, on: 1) (default: 0 [disabled]) OPTIONAL
 Secure - If you wish to use a secure connection. (0 - None, 1 - SSL [no verify]) OPTIONAL [Requires Net::SSLeay]
 
 Threads - How many concurrent connections per host (default: 2) OPTIONAL
+
+Encode - Encode socket( 1: utf8 )
 
 Callbacks - You can supply callback functions on certain conditions, these conditions include:
 
@@ -108,6 +111,7 @@ sub new {
     bless($self, $class||'Net::SMTP::Bulk');
 
     $self->{new}=\%new;
+    $self->{encode} = 'utf8' if ( $new{Encode} eq '1' );
     $self->{debug} = (($new{Debug}||0) >= 1) ? int($new{Debug}):0;
     $self->{debug_path} = $new{DebugPath}||'debug_[HOST]_[THREAD].txt';
     $self->{func} = $new{Callbacks};
@@ -484,6 +488,7 @@ sub _PREPARE {
                 $path=~s/\[HOST\]/$new{Host}/gs;
                 $path=~s/\[THREAD\]/$t/gs;
                 open( $self->{debug_fh}{ $new{Host}.':'.$t } , '>>'.$path );
+                binmode( $self->{debug_fh}{ $new{Host}.':'.$t } , ':utf8' );
             }
 
             
@@ -739,7 +744,8 @@ sub _WRITE {
     my $str=shift;
     $str=~s/[\r\n]+?$//s;
     $self->_DEBUG($k,'>>'.$str) if $self->{debug} >= 1;
-    $self->{fh}{ $k->[0] }{ $k->[1] }->print($str."\r\n");
+    
+    $self->{fh}{ $k->[0] }{ $k->[1] }->print( ($self->{encode} ne '') ? Encode::encode($self->{encode}=>$str."\r\n"):$str."\r\n"  );
 }
 
 sub _DEBUG {

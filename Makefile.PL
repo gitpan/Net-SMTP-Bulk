@@ -7,6 +7,7 @@ WriteMakefile
   'PREREQ_PM' => {
                    'AnyEvent' => 0,
                    'Coro' => 0,
+                   'Encode' => 0,
                    'Test::More' => 0
                  },
   'INSTALLDIRS' => 'site',

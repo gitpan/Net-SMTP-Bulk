@@ -1,5 +1,10 @@
 Revision history for Perl module Net::SMTP::Bulk
 
+0.14 2013-10-08
+
+    - Added Encode socket to utf8 option
+    - Added Encode write log file to utf8 and set to default
+
 0.13 2013-09-20
 
     - Fixed order repeat on restart 

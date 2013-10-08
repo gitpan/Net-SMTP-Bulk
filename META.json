@@ -32,14 +32,15 @@
          },
          "requires" : {
             "AnyEvent" : "0",
-            "Coro" : "0"
+            "Coro" : "0",
+            "Encode" : "0"
          }
       }
    },
    "provides" : {
       "Net::SMTP::Bulk" : {
          "file" : "lib/Net/SMTP/Bulk.pm",
-         "version" : "0.13"
+         "version" : "0.14"
       }
    },
    "release_status" : "stable",
@@ -48,5 +49,5 @@
          "http://dev.perl.org/licenses/"
       ]
    },
-   "version" : "0.13"
+   "version" : "0.14"
 }

@@ -18,6 +18,7 @@ my $builder = Module::Build->new(
     requires => {
         'Coro'              => 0,
         'AnyEvent'              => 0,
+        'Encode'              => 0,
     },
     recommends => {
         'IO::Socket::SSL'              => 0,

@@ -2,7 +2,7 @@ NAME
     Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 VERSION
-    Version 0.13
+    Version 0.14
 
 SYNOPSIS
     This is a rewrite of Net::SMTP using AnyEvent and Coro as a backbone. It
@@ -34,6 +34,8 @@ SUBROUTINES/METHODS
     verify]) OPTIONAL [Requires Net::SSLeay]
 
     Threads - How many concurrent connections per host (default: 2) OPTIONAL
+
+    Encode - Encode socket( 1: utf8 )
 
     Callbacks - You can supply callback functions on certain conditions,
     these conditions include:
