@@ -1,5 +1,9 @@
 Revision history for Perl module Net::SMTP::Bulk
 
+0.15 2013-10-17
+
+    - Fixed warnings when Encode is not used
+
 0.14 2013-10-08
 
     - Added Encode socket to utf8 option

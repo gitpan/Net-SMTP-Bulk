@@ -15,11 +15,11 @@ Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 =head1 VERSION
 
-Version 0.14
+Version 0.15
 
 =cut
 
-our $VERSION = '0.14';
+our $VERSION = '0.15';
 
 
 =head1 SYNOPSIS
@@ -111,7 +111,7 @@ sub new {
     bless($self, $class||'Net::SMTP::Bulk');
 
     $self->{new}=\%new;
-    $self->{encode} = 'utf8' if ( $new{Encode} eq '1' );
+    $self->{encode} =  ( ($new{Encode}||'') eq '1' ) ? 'utf8':'';
     $self->{debug} = (($new{Debug}||0) >= 1) ? int($new{Debug}):0;
     $self->{debug_path} = $new{DebugPath}||'debug_[HOST]_[THREAD].txt';
     $self->{func} = $new{Callbacks};
