@@ -1,5 +1,11 @@
 Revision history for Perl module Net::SMTP::Bulk
 
+0.16 2014-01-29
+
+    - Added new mode for using AnyEvent only.
+    - Moved library to Net::SMTP::Bulk::Coro.
+    - Added library Net::SMTP::Bulk::AnyEvent
+
 0.15 2013-10-17
 
     - Fixed warnings when Encode is not used

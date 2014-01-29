@@ -16,11 +16,11 @@ my $builder = Module::Build->new(
         'Test::More' => 0,
     },
     requires => {
-        'Coro'              => 0,
         'AnyEvent'              => 0,
         'Encode'              => 0,
     },
     recommends => {
+        'Coro'              => 0,
         'IO::Socket::SSL'              => 0,
         'Authen::SASL'              => 0,
         'MIME::Base64'              => 0,

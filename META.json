@@ -27,12 +27,12 @@
       "runtime" : {
          "recommends" : {
             "Authen::SASL" : "0",
+            "Coro" : "0",
             "IO::Socket::SSL" : "0",
             "MIME::Base64" : "0"
          },
          "requires" : {
             "AnyEvent" : "0",
-            "Coro" : "0",
             "Encode" : "0"
          }
       }
@@ -40,7 +40,15 @@
    "provides" : {
       "Net::SMTP::Bulk" : {
          "file" : "lib/Net/SMTP/Bulk.pm",
-         "version" : "0.15"
+         "version" : "0.16"
+      },
+      "Net::SMTP::Bulk::AnyEvent" : {
+         "file" : "lib/Net/SMTP/Bulk/AnyEvent.pm",
+         "version" : 0
+      },
+      "Net::SMTP::Bulk::Coro" : {
+         "file" : "lib/Net/SMTP/Bulk/Coro.pm",
+         "version" : "0.16"
       }
    },
    "release_status" : "stable",
@@ -49,5 +57,5 @@
          "http://dev.perl.org/licenses/"
       ]
    },
-   "version" : "0.15"
+   "version" : "0.16"
 }

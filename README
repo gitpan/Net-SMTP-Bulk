@@ -2,7 +2,7 @@ NAME
     Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 VERSION
-    Version 0.15
+    Version 0.16
 
 SYNOPSIS
     This is a rewrite of Net::SMTP using AnyEvent and Coro as a backbone. It
@@ -21,6 +21,8 @@ SUBROUTINES/METHODS
   new($server,%options)
   new(%options)
     Options: Host - Hostname or IP address
+
+    Mode - Options of AnyEvent or Coro (default: Coro)
 
     Port - The port to which to connect to on the server (default: 25)
 
