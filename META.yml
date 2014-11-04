@@ -3,34 +3,33 @@ abstract: 'NonBlocking batch SMTP using Net::SMTP interface'
 author:
   - KnowZero
 build_requires:
-  Test::More: 0
+  Test::More: '0'
 configure_requires:
-  Module::Build: 0
+  Module::Build: '0'
 dynamic_config: 1
-generated_by: 'Module::Build version 0.4005, CPAN::Meta::Converter version 2.120921'
+generated_by: 'Module::Build version 0.4203, CPAN::Meta::Converter version 2.132830'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
-  version: 1.4
+  version: '1.4'
 name: Net-SMTP-Bulk
 provides:
   Net::SMTP::Bulk:
     file: lib/Net/SMTP/Bulk.pm
-    version: 0.16
+    version: '0.17'
   Net::SMTP::Bulk::AnyEvent:
     file: lib/Net/SMTP/Bulk/AnyEvent.pm
-    version: 0
   Net::SMTP::Bulk::Coro:
     file: lib/Net/SMTP/Bulk/Coro.pm
-    version: 0.16
+    version: '0.16'
 recommends:
-  Authen::SASL: 0
-  Coro: 0
-  IO::Socket::SSL: 0
-  MIME::Base64: 0
+  Authen::SASL: '1'
+  Coro: '1'
+  IO::Socket::SSL: '1'
+  MIME::Base64: '1'
 requires:
-  AnyEvent: 0
-  Encode: 0
+  AnyEvent: '1'
+  Encode: '1'
 resources:
   license: http://dev.perl.org/licenses/
-version: 0.16
+version: '0.17'

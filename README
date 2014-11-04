@@ -2,7 +2,7 @@ NAME
     Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 VERSION
-    Version 0.16
+    Version 0.17
 
 SYNOPSIS
     This is a rewrite of Net::SMTP using AnyEvent and Coro as a backbone. It
@@ -22,15 +22,19 @@ SUBROUTINES/METHODS
   new(%options)
     Options: Host - Hostname or IP address
 
-    Mode - Options of AnyEvent or Coro (default: Coro)
+    Mode - Options of AnyEvent or Coro (default: Coro but switches to
+    AnyEvent if Coro is not installed)
 
     Port - The port to which to connect to on the server (default: 25)
 
     Hello - The domain name you wish to connect to (default: [same as
     server])
 
-    Debug - Debug information (off: 0, on: 1) (default: 0 [disabled])
-    OPTIONAL
+    Debug - Debug information (Coro: off: 0, on: 1, AnyEvent: 0-10 depending
+    on level) (default: 0 [disabled]) OPTIONAL
+
+    DebugPath - Set to default Debug Path. use [HOST] and [THREAD] for
+    deeper control of output OPTIONAL
 
     Secure - If you wish to use a secure connection. (0 - None, 1 - SSL [no
     verify]) OPTIONAL [Requires Net::SSLeay]
@@ -81,11 +85,11 @@ AUTHOR
     KnowZero
 
 BUGS
-    Please report any bugs or feature requests to `bug-net-smtp-bulk at
-    rt.cpan.org', or through the web interface at
-    http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Net-SMTP-Bulk. I will be
-    notified, and then you'll automatically be notified of progress on your
-    bug as I make changes.
+    Please report any bugs or feature requests to "bug-net-smtp-bulk at
+    rt.cpan.org", or through the web interface at
+    <http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Net-SMTP-Bulk>. I will
+    be notified, and then you'll automatically be notified of progress on
+    your bug as I make changes.
 
 SUPPORT
     You can find documentation for this module with the perldoc command.
@@ -94,17 +98,21 @@ SUPPORT
 
     You can also look for information at:
 
-    * RT: CPAN's request tracker (report bugs here)
-        http://rt.cpan.org/NoAuth/Bugs.html?Dist=Net-SMTP-Bulk
+    *   RT: CPAN's request tracker (report bugs here)
 
-    * AnnoCPAN: Annotated CPAN documentation
-        http://annocpan.org/dist/Net-SMTP-Bulk
+        <http://rt.cpan.org/NoAuth/Bugs.html?Dist=Net-SMTP-Bulk>
 
-    * CPAN Ratings
-        http://cpanratings.perl.org/d/Net-SMTP-Bulk
+    *   AnnoCPAN: Annotated CPAN documentation
 
-    * Search CPAN
-        http://search.cpan.org/dist/Net-SMTP-Bulk/
+        <http://annocpan.org/dist/Net-SMTP-Bulk>
+
+    *   CPAN Ratings
+
+        <http://cpanratings.perl.org/d/Net-SMTP-Bulk>
+
+    *   Search CPAN
+
+        <http://search.cpan.org/dist/Net-SMTP-Bulk/>
 
 ACKNOWLEDGEMENTS
 LICENSE AND COPYRIGHT
@@ -114,5 +122,5 @@ LICENSE AND COPYRIGHT
     under the terms of either: the GNU General Public License as published
     by the Free Software Foundation; or the Artistic License.
 
-    See http://dev.perl.org/licenses/ for more information.
+    See <http://dev.perl.org/licenses/> for more information.
 

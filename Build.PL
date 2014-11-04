@@ -5,7 +5,7 @@ use Module::Build;
 
 my $builder = Module::Build->new(
     module_name         => 'Net::SMTP::Bulk',
-    license             => 'Perl_5',
+    license             => 'perl',
     dist_author         => q{KnowZero},
     dist_version_from   => 'lib/Net/SMTP/Bulk.pm',
     release_status      => 'stable',
@@ -16,14 +16,14 @@ my $builder = Module::Build->new(
         'Test::More' => 0,
     },
     requires => {
-        'AnyEvent'              => 0,
-        'Encode'              => 0,
+        'AnyEvent'              => 1,
+        'Encode'              => 1,
     },
     recommends => {
-        'Coro'              => 0,
-        'IO::Socket::SSL'              => 0,
-        'Authen::SASL'              => 0,
-        'MIME::Base64'              => 0,
+        'Coro'              => 1,
+        'IO::Socket::SSL'              => 1,
+        'Authen::SASL'              => 1,
+        'MIME::Base64'              => 1,
     },
     add_to_cleanup     => [ 'Net-SMTP-Bulk-*' ],
     create_readme => 1,

@@ -16,11 +16,11 @@ Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 =head1 VERSION
 
-Version 0.16
+Version 0.17
 
 =cut
 
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 
 
 =head1 SYNOPSIS
@@ -43,13 +43,15 @@ See Net::SMTP for syntax.
 Options:
 Host - Hostname or IP address
 
-Mode - Options of AnyEvent or Coro (default: Coro)
+Mode - Options of AnyEvent or Coro (default: Coro but switches to AnyEvent if Coro is not installed)
 
 Port - The port to which to connect to on the server (default: 25)
 
 Hello - The domain name you wish to connect to (default: [same as server])
 
-Debug - Debug information (off: 0, on: 1) (default: 0 [disabled]) OPTIONAL
+Debug - Debug information (Coro: off: 0, on: 1, AnyEvent: 0-10 depending on level) (default: 0 [disabled]) OPTIONAL
+
+DebugPath - Set to default Debug Path. use [HOST] and [THREAD] for deeper control of output OPTIONAL
 
 Secure - If you wish to use a secure connection. (0 - None, 1 - SSL [no verify]) OPTIONAL [Requires Net::SSLeay]
 
@@ -107,12 +109,17 @@ sub new {
     my %new=@_;
     my $self={};
 
-    if ($new{Mode} eq 'AnyEvent') {
-    require Net::SMTP::Bulk::AnyEvent;    
-    $self=Net::SMTP::Bulk::AnyEvent->new(@_);    
+    if (($new{Mode}||'') eq 'AnyEvent') {
+        require Net::SMTP::Bulk::AnyEvent;    
+        $self=Net::SMTP::Bulk::AnyEvent->new(@_);    
     } else {
-    require Net::SMTP::Bulk::Coro; 
-    $self=Net::SMTP::Bulk::Coro->new(@_); 
+        if (eval { require Net::SMTP::Bulk::Coro; 1 }) {
+            $self=Net::SMTP::Bulk::Coro->new(@_);
+        } else {
+            require Net::SMTP::Bulk::AnyEvent; 
+            $self=Net::SMTP::Bulk::AnyEvent->new(@_);
+        }
+    
         
     }
     

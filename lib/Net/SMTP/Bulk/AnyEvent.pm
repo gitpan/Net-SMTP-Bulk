@@ -4,6 +4,7 @@ use AnyEvent::Handle;
 use AnyEvent::Socket;
 
 use MIME::Base64;
+use Encode;
 
 
 
@@ -47,8 +48,17 @@ sub new {
     $self->{new}=\%new;
     $self->{encode} =  ( ($new{Encode}||'') eq '1' ) ? 'utf8':'';
     $self->{debug} = (($new{Debug}||0) >= 1) ? int($new{Debug}):0;
-    $self->{debug_path} = $new{DebugPath}||'debug_[HOST]_[THREAD].txt';
+    
+    if ( ($new{DebugPath}||'') ne '' ) {
+        $self->{debug_path} = ( lc($new{DebugPath}) eq 'default' ) ? 'debug_[HOST]_[THREAD].txt':$new{DebugPath};
+    }
+    
+   
+    
+    
     $self->{func} = $new{Callbacks};
+    $self->{global_timeout} = $new{GlobalTimeout}||120;
+    $self->{last_active}=time;
     $self->{defaults}={
                        threads=>$new{Threads}||2,
                        port=>$new{Port}||25,
@@ -165,10 +175,40 @@ sub quit {
     my $self=shift;
     
     
+    my $timer;
+    
+    if ($self->{global_timeout} > 0) {
+        $timer = AnyEvent->timer(
+                             after=>60,
+                             cb=> sub {
+                                
+                                if ( ($self->{last_active} + $self->{global_timeout}) < time ) {
+                                    undef($timer);
+                                    
+                                    my $r=$self->_FUNC('global_hang',$self,[-1,-1],0,[]);
+                                    
+                                    $self->{cv}->send;
+                                    
+                                        foreach my $h ( keys(%{ $self->{threads} })  ) {
+                                            foreach my $t ( 0..$self->{threads}{ $h } ) {
+                                                $self->{fh}{threads}{ $h }{ $t }->destroy if defined($self->{fh}{threads}{ $h }{ $t });
+                                                $self->_DEBUG([$h,$t],'GLOBAL TIMEOUT : (PASS:'.($self->{stats}{ $h }{ $t }{queue}{pass}).'|HANG:'.($self->{stats}{ $h }{ $t }{queue}{hang}).'|FAIL:'.($self->{stats}{ $h }{ $t }{queue}{fail}).'|TOTAL:'.$self->{stats}{ $h }{ $t }{queue}{total}.')',5) if $self->{debug} >= 1;
+                                            }
+                                        }
+                                }
+                                
+                             }
+                             
+                             );
+    }
+    
     foreach my $h ( keys(%{ $self->{threads} })  ) {
         foreach my $t ( 0..$self->{threads}{ $h } ) {
 #print "QSS($#{$self->{queue}{ $h }{ $t }})\n";
-             if ( $#{$self->{queue}{ $h }{ $t }} >= 0 ) {
+
+            $self->_DEBUG([$h,$t],'Set Queue : '.($#{$self->{queue}{ $h }{ $t }}+1),5) if $self->{debug} >= 1;
+            $self->{stats}{ $h }{ $t }{queue}{total}=($#{$self->{queue}{ $h }{ $t }}+1);
+            if ( $#{$self->{queue}{ $h }{ $t }} >= 0 ) {
      
             $self->{cv}->begin;
             $self->_CONNECT([$h,$t]);
@@ -176,8 +216,24 @@ sub quit {
             }
         }
     }
+    
     #$self->_BULK();
-     $self->{cv}->recv;
+    $self->{cv}->recv;
+     
+    undef($timer) if defined($timer);
+     
+     
+     
+    foreach my $h ( keys(%{ $self->{threads} })  ) {
+        foreach my $t ( 0..$self->{threads}{ $h } ) {
+            $self->{fh}{threads}{ $h }{ $t }->destroy if defined($self->{fh}{threads}{ $h }{ $t });
+            
+             $self->_DEBUG([$h,$t],'End Queue : (PASS:'.($self->{stats}{ $h }{ $t }{queue}{pass}).'|HANG:'.($self->{stats}{ $h }{ $t }{queue}{hang}).'|FAIL:'.($self->{stats}{ $h }{ $t }{queue}{fail}).'|TOTAL:'.$self->{stats}{ $h }{ $t }{queue}{total}.')',5) if $self->{debug} >= 1;
+        }
+    }
+    
+    
+     
 }
 
 
@@ -220,7 +276,7 @@ sub _PREPARE {
         
        
         foreach my $t ( 0..$self->{threads}{ $new{Host} } ) {
-            if ($self->{debug} == 2) {
+            if ( exists($self->{debug_path}) ) {
                 my $path=''.$self->{debug_path};
                 $path=~s/\[HOST\]/$new{Host}/gs;
                 $path=~s/\[THREAD\]/$t/gs;
@@ -231,7 +287,15 @@ sub _PREPARE {
             
             $self->{auth}{ $new{Host} }{$t}=[0,''];
             $self->{queue}{ $new{Host} }{$t}=[];
-            $self->{queue_size}{ $new{Host} }{$t}=0;    
+            $self->{queue_size}{ $new{Host} }{$t}=0;
+            $self->{stats}{ $new{Host} }{ $t }={
+                queue => {
+                                                total=>0,
+                                                pass=>0,
+                                                hang=>0,
+                                                fail=>0
+                       }
+                                                };
             push(@{$self->{order}}, [$new{Host},$t,1] );
             
             #$self->_CONNECT([$new{Host},$t]);
@@ -275,12 +339,21 @@ sub _CONNECT {
      
      $self->{fh}{ $k->[0] }{ $k->[1] } = new AnyEvent::Handle(
       connect  => [$self->{host}{ $k->[0] }, $self->{port}{ $k->[0] }],
-      on_read=>sub { $self->_READ($k); },
-      on_error=>sub {
-        
+      on_read => sub { $self->_READ($k); },
+      
+      timeout => ($self->{timeout}{ $k->[0] }||60),
+      on_timeout=> sub {
+        $self->{stats}{ $k->[0] }{ $k->[1] }{queue}{hang}++;
+        my $r=$self->_FUNC('hang',$self,$k,0,[$self->{on_queue}{ $k->[0] }{ $k->[1] }]);
+        $self->_DEBUG($k,'Email : '.$self->{on_queue}{ $k->[0] }{ $k->[1] }{to}.' : HANG',8) if $self->{debug} >= 1;
+        $self->reconnect($k->[0],$k->[1]) if ($r == 1 or $r == 103);
+      },
+      on_error => sub {
+        $self->{stats}{ $k->[0] }{ $k->[1] }{queue}{fail}++;
         my $r=$self->_FUNC('fail',$self,$k,0,[$self->{on_queue}{ $k->[0] }{ $k->[1] }]);
-       
-        $self->reconnect($k->[0],$k->[1]);
+        
+        $self->_DEBUG($k,'Email : '.$self->{on_queue}{ $k->[0] }{ $k->[1] }{to}.' : FAIL',8) if $self->{debug} >= 1;
+        $self->reconnect($k->[0],$k->[1]) if ($r == 1 or $r == 103);
         
         },
       %extra
@@ -449,15 +522,18 @@ sub _READ {
     my $self=shift;
     my $k=shift;
     
+    $self->{last_active}=time;
+    
     $self->{fh}{ $k->[0] }{ $k->[1] }->push_read (line => sub {
         
         $self->{handle}{ $k->[0] }{ $k->[1] }=shift;
         $self->{buffer}{ $k->[0] }{ $k->[1] }=shift;
         $self->_DEBUG($k,$self->{buffer}{ $k->[0] }{ $k->[1] }) if $self->{debug} >= 1;
             
-        if ($self->{buffer}{ $k->[0] }{ $k->[1] }=~m/^(\d+?)[ \-](.*?)$/is) {
+        if ($self->{buffer}{ $k->[0] }{ $k->[1] }=~m/^(\d+?)([ \-])(.*?)$/is) {
             $self->{status_code}{ $k->[0] }{ $k->[1] }=$1;
-            $self->{status_text}{ $k->[0] }{ $k->[1] }=$2;
+            $self->{status_mode}{ $k->[0] }{ $k->[1] }=$2;
+            $self->{status_text}{ $k->[0] }{ $k->[1] }=$3;
 
 
             if ( $self->{status_code}{ $k->[0] }{ $k->[1] } == 250 and $self->{stage}{ $k->[0] }{ $k->[1] }[0] eq 'DATAEND' and $self->{stage}{ $k->[0] }{ $k->[1] }[1] == 2 ) {
@@ -468,6 +544,10 @@ sub _READ {
                 #    $self->{open_threads}=3;
                 #}
                 
+                $self->{stats}{ $k->[0] }{ $k->[1] }{queue}{pass}++;
+                $self->_DEBUG($k,'Email : '.$self->{on_queue}{ $k->[0] }{ $k->[1] }{to}.' : PASS',8) if $self->{debug} >= 1;
+                my $r=$self->_FUNC('pass',$self,$k,0,$self->{queue}{ $k->[0] }{ $k->[1] });
+
                 
                 #print "THREADS($self->{open_threads})\n";
                 $self->{stage}{ $k->[0] }{ $k->[1] }=['MAIL',0];
@@ -475,23 +555,27 @@ sub _READ {
             
             if ( $self->{status_code}{ $k->[0] }{ $k->[1] } == 220 ) {
                 $self->{stage}{ $k->[0] }{ $k->[1] }=['HELO',0];
+                if (  $self->{status_mode}{ $k->[0] }{ $k->[1] } eq ' ' ) {
+    
                 my $r=$self->_FUNC('connect_pass',$self,$k,0,$self->{queue}{ $k->[0] }{ $k->[1] });
-               
+
                 $self->_HELO($k);
                 $self->{stage}{ $k->[0] }{ $k->[1] }=['HELO',1];
+                }
             } elsif ( $self->{status_code}{ $k->[0] }{ $k->[1] } == 221 ) {
                 $self->{fh}{ $k->[0] }{ $k->[1] }->destroy;
-            } elsif ( $self->{status_code}{ $k->[0] }{ $k->[1] } == 250 and !exists($self->{header}{ $k->[0] }{ $k->[1] }{'ok'}) ) {
+            } elsif ( $self->{status_code}{ $k->[0] }{ $k->[1] } == 250 and $self->{stage}{ $k->[0] }{ $k->[1] }[0] eq 'HELO' or $self->{stage}{ $k->[0] }{ $k->[1] }[0] eq 'HEADER' ) {
                 $self->{stage}{ $k->[0] }{ $k->[1] }=['HEADER',0];
                 $self->_HEADER($k,$self->{buffer}{ $k->[0] }{ $k->[1] });
         
-                if ( $self->{status_code}{ $k->[0] }{ $k->[1] } == 250 and exists($self->{header}{ $k->[0] }{ $k->[1] }{'ok'}) ) {
+                if ( $self->{status_mode}{ $k->[0] }{ $k->[1] } eq ' ' ) {
                      $self->{stage}{ $k->[0] }{ $k->[1] }=['HEADER',1]; 
                     
-                    if ( $self->{status_code}{ $k->[0] }{ $k->[1] } == 250 and exists($self->{auth}{ $k->[0] }{ $k->[1] }) ) {
+                    if ( exists($self->{auth}{ $k->[0] }{ $k->[1] }) ) {
                         $self->_AUTH($k);
                     } else {
                          $self->{stage}{ $k->[0] }{ $k->[1] }=['MAIL',0];
+                       
                     }
                 }
                
@@ -550,6 +634,9 @@ sub _WRITE {
    my $k=shift;
     my $str=shift;
     $str=~s/[\r\n]+?$//s;
+    
+    $self->{last_active}=time;
+    
    $self->_DEBUG($k,'>>'.$str) if $self->{debug} >= 1;
    $self->{handle}{ $k->[0] }{ $k->[1] }->push_write( ($self->{encode} ne '') ? Encode::encode($self->{encode}=>$str."\r\n"):$str."\r\n" );
 }
@@ -558,10 +645,16 @@ sub _DEBUG {
     my $self=shift;
     my $k=shift;
     my $str=shift||'';
-    if ($self->{debug} == 1) {
-        print '['.$k->[0].':'.$k->[1].'] '.$str."\n";
-    } else {
-        print { $self->{debug_fh}{ $k->[0].':'.$k->[1] }  } '['.$k->[0].':'.$k->[1].'] '.$str."\n";
+    my $dlevel = shift||10;
+    
+    if ( $dlevel <= $self->{debug} ) {
+
+        if ( exists($self->{debug_path}) ) {
+            print { $self->{debug_fh}{ $k->[0].':'.$k->[1] }  } '['.$k->[0].':'.$k->[1].'] '.$str."\n";
+        } else {
+            print '['.$k->[0].':'.$k->[1].'] '.$str."\n";
+        }
+    
     }
 }
 

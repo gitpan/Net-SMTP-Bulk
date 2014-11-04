@@ -1,5 +1,16 @@
 Revision history for Perl module Net::SMTP::Bulk
 
+
+0.17 2014-11-03
+
+    - Fixed issue of handles not being closed correctly in Net::SMTP::Bulk::AnyEvent and fixed some session errors.
+    - Fixed improper header issue in Net::SMTP::Bulk::AnyEvent.
+    - Added Encode to require list.
+    - Added timeout (set to 60 seconds by default), timeout handles and global timeout (set to 120 seconds by default) and global timeout handle.
+    - Removed Debug=1 and Debug=2 for Net::SMTP::Bulk::AnyEvent
+    - Added Debug 1 - 10 for controlling details of debugging. DebugPath will force writing to filehandle, without setting DebugPath it will print to STDOUT. Setting DebugPath to 'default' will use default path and format. (This breaks compatibility between Net::SMTP::Bulk::AnyEvent and Net::SMTP::Bulk::Coro debugging for now)
+
+
 0.16 2014-01-29
 
     - Added new mode for using AnyEvent only.
