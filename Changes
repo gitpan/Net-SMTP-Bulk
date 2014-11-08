@@ -1,5 +1,12 @@
 Revision history for Perl module Net::SMTP::Bulk
 
+0.18 2014-11-07
+    - Added debug email counter and timestamp to Net::SMTP::Bulk::AnyEvent.
+    - Updated some hangs to be quicker to Net::SMTP::Bulk::AnyEvent.
+    - Fixed freeze if no email is sent on quit command on Net::SMTP::Bulk::AnyEvent.
+    - Fixed proper disconnect on quit command on Net::SMTP::Bulk::AnyEvent.
+    - Fixed reconnect to actually work properly on Net::SMTP::Bulk::AnyEvent.
+    - Added retry attempts for hang (default: 1), fail (default: 0), global hang (default: 1) to Net::SMTP::Bulk::AnyEvent.
 
 0.17 2014-11-03
 

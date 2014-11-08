@@ -2,15 +2,15 @@
 use ExtUtils::MakeMaker;
 WriteMakefile
 (
-  'EXE_FILES' => [],
-  'PL_FILES' => {},
-  'NAME' => 'Net::SMTP::Bulk',
   'INSTALLDIRS' => 'site',
-  'VERSION_FROM' => 'lib/Net/SMTP/Bulk.pm',
+  'NAME' => 'Net::SMTP::Bulk',
+  'PL_FILES' => {},
   'PREREQ_PM' => {
-                   'Encode' => 1,
                    'AnyEvent' => 1,
-                   'Test::More' => 0
-                 }
+                   'Test::More' => 0,
+                   'Encode' => 1
+                 },
+  'VERSION_FROM' => 'lib/Net/SMTP/Bulk.pm',
+  'EXE_FILES' => []
 )
 ;

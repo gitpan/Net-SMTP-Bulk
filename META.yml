@@ -16,7 +16,7 @@ name: Net-SMTP-Bulk
 provides:
   Net::SMTP::Bulk:
     file: lib/Net/SMTP/Bulk.pm
-    version: '0.17'
+    version: '0.18'
   Net::SMTP::Bulk::AnyEvent:
     file: lib/Net/SMTP/Bulk/AnyEvent.pm
   Net::SMTP::Bulk::Coro:
@@ -32,4 +32,4 @@ requires:
   Encode: '1'
 resources:
   license: http://dev.perl.org/licenses/
-version: '0.17'
+version: '0.18'

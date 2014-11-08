@@ -63,7 +63,12 @@ sub new {
                        threads=>$new{Threads}||2,
                        port=>$new{Port}||25,
                        timeout=>$new{Timeout}||30,
-                       secure=>$new{Secure}||0
+                       secure=>$new{Secure}||0,
+                       retry=>{
+                        global_hang=>1,
+                        hang=>1,
+                        fail=>0
+                       }
                        };
     
     
@@ -179,22 +184,45 @@ sub quit {
     
     if ($self->{global_timeout} > 0) {
         $timer = AnyEvent->timer(
-                             after=>60,
+                             after=> int(($self->{global_timeout}+1)/2)+1,
                              cb=> sub {
                                 
                                 if ( ($self->{last_active} + $self->{global_timeout}) < time ) {
-                                    undef($timer);
+                                    
                                     
                                     my $r=$self->_FUNC('global_hang',$self,[-1,-1],0,[]);
                                     
-                                    $self->{cv}->send;
+                                    
+#$self->{retry}{ $k->[0] }{hang}
+                                    
+                                    my $end=1;
                                     
                                         foreach my $h ( keys(%{ $self->{threads} })  ) {
                                             foreach my $t ( 0..$self->{threads}{ $h } ) {
-                                                $self->{fh}{threads}{ $h }{ $t }->destroy if defined($self->{fh}{threads}{ $h }{ $t });
+                                                $self->{last_active}=time;
+                                                #$self->{fh}{threads}{ $h }{ $t }->destroy if defined($self->{fh}{threads}{ $h }{ $t });
                                                 $self->_DEBUG([$h,$t],'GLOBAL TIMEOUT : (PASS:'.($self->{stats}{ $h }{ $t }{queue}{pass}).'|HANG:'.($self->{stats}{ $h }{ $t }{queue}{hang}).'|FAIL:'.($self->{stats}{ $h }{ $t }{queue}{fail}).'|TOTAL:'.$self->{stats}{ $h }{ $t }{queue}{total}.')',5) if $self->{debug} >= 1;
+                                                if ( $self->{retry}{ $k->[0] }{global_hang} >= $self->{retry}{ $k->[0] }{global_hang_count} ) {
+                                                    $self->{retry}{ $k->[0] }{global_hang_count}++;
+                                                    
+                                                    
+                                                    $self->reconnect([$h,$t],99,1);
+                                                    $end=0;
+                                                } else {
+                                                    $self->{fh}{threads}{ $h }{ $t }->destroy if defined($self->{fh}{threads}{ $h }{ $t });
+                                                }
+                                                
+                                                
+                                            
                                             }
                                         }
+                                        
+                                        if ($end == 1) {
+                                            undef($timer);
+                                            $self->{cv}->send;
+                                        }
+                                        
+ 
                                 }
                                 
                              }
@@ -202,12 +230,17 @@ sub quit {
                              );
     }
     
+    my $id=time;
+    my $total=0;
     foreach my $h ( keys(%{ $self->{threads} })  ) {
         foreach my $t ( 0..$self->{threads}{ $h } ) {
 #print "QSS($#{$self->{queue}{ $h }{ $t }})\n";
-
-            $self->_DEBUG([$h,$t],'Set Queue : '.($#{$self->{queue}{ $h }{ $t }}+1),5) if $self->{debug} >= 1;
+            $self->{stats}{ $h }{ $t }{queue}{id}=$id;
             $self->{stats}{ $h }{ $t }{queue}{total}=($#{$self->{queue}{ $h }{ $t }}+1);
+            $total+=$self->{stats}{ $h }{ $t }{queue}{total};
+            
+            $self->_DEBUG([$h,$t],'Set Queue : '.$self->{stats}{ $h }{ $t }{queue}{total},5) if $self->{debug} >= 1;
+
             if ( $#{$self->{queue}{ $h }{ $t }} >= 0 ) {
      
             $self->{cv}->begin;
@@ -217,8 +250,11 @@ sub quit {
         }
     }
     
+
+    
+    
     #$self->_BULK();
-    $self->{cv}->recv;
+    $self->{cv}->recv if $total > 0;
      
     undef($timer) if defined($timer);
      
@@ -229,6 +265,7 @@ sub quit {
             $self->{fh}{threads}{ $h }{ $t }->destroy if defined($self->{fh}{threads}{ $h }{ $t });
             
              $self->_DEBUG([$h,$t],'End Queue : (PASS:'.($self->{stats}{ $h }{ $t }{queue}{pass}).'|HANG:'.($self->{stats}{ $h }{ $t }{queue}{hang}).'|FAIL:'.($self->{stats}{ $h }{ $t }{queue}{fail}).'|TOTAL:'.$self->{stats}{ $h }{ $t }{queue}{total}.')',5) if $self->{debug} >= 1;
+            $self->{stats}{ $h }{ $t }{queue}{id}=0;
         }
     }
     
@@ -241,12 +278,20 @@ sub quit {
 sub reconnect {
        my $self=shift;
     my $k=shift||$self->{last}[0];
+    my $retry=shift||0;
+    my $global=shift||0;
     
+    if ($retry > ($self->{on_queue}{ $k->[0] }{ $k->[1] }{retry}||0) ) {
+        $self->{queue_size}{ $k->[0] }{ $k->[1] }++;
+        $self->{on_queue}{ $k->[0] }{ $k->[1] }{retry} = ($self->{on_queue}{ $k->[0] }{ $k->[1] }||0) + 1 if $global == 0;
+        push(@{ $self->{queue}{ $k->[0] }{ $k->[1] } }, $self->{on_queue}{ $k->[0] }{ $k->[1] });
+    }
     
     $self->{fh}{ $k->[0] }{ $k->[1] }->destroy if defined($self->{fh}{ $k->[0] }{ $k->[1] });
     #$self->{cv}->end;
     #delete($self->{auth}{ $k->[0] }{ $k->[1] });
     #$self->{cv}->begin;
+                $self->{stage}{ $k->[0] }{ $k->[1] }=['BEGIN',0];
             $self->_CONNECT($k);
     
 }
@@ -272,6 +317,12 @@ sub _PREPARE {
         $self->{helo}{ $new{Host} }=$new{Hello}||$self->{host}{ $new{Host} };
         $self->{timeout}{ $new{Host} }=$new{Timeout}||$self->{defaults}{timeout};
         $self->{threads}{ $new{Host} }=($new{Threads}||$self->{defaults}{threads}) - 1;
+        
+        $self->{retry}{ $new{Host} }{hang}=$new{Retry}{Hang}||$self->{defaults}{retry}{hang};
+        $self->{retry}{ $new{Host} }{global_hang}=$new{Retry}{GlobalHang}||$self->{defaults}{retry}{global_hang};
+        $self->{retry}{ $new{Host} }{global_hang_count}=0;
+        $self->{retry}{ $new{Host} }{fail}=$new{Retry}{Hang}||$self->{defaults}{retry}{fail};
+        
         $self->{open_threads}+=$self->{threads}{ $new{Host} };
         
        
@@ -288,12 +339,15 @@ sub _PREPARE {
             $self->{auth}{ $new{Host} }{$t}=[0,''];
             $self->{queue}{ $new{Host} }{$t}=[];
             $self->{queue_size}{ $new{Host} }{$t}=0;
+            $self->{stage}{ $new{Host} }{ $t }=['BEGIN',0];
             $self->{stats}{ $new{Host} }{ $t }={
                 queue => {
                                                 total=>0,
                                                 pass=>0,
                                                 hang=>0,
-                                                fail=>0
+                                                fail=>0,
+                                                count=>0,
+                                                id=>0
                        }
                                                 };
             push(@{$self->{order}}, [$new{Host},$t,1] );
@@ -345,15 +399,15 @@ sub _CONNECT {
       on_timeout=> sub {
         $self->{stats}{ $k->[0] }{ $k->[1] }{queue}{hang}++;
         my $r=$self->_FUNC('hang',$self,$k,0,[$self->{on_queue}{ $k->[0] }{ $k->[1] }]);
-        $self->_DEBUG($k,'Email : '.$self->{on_queue}{ $k->[0] }{ $k->[1] }{to}.' : HANG',8) if $self->{debug} >= 1;
-        $self->reconnect($k->[0],$k->[1]) if ($r == 1 or $r == 103);
+        $self->_DEBUG($k,'Email : '.(++$self->{stats}{ $k->[0] }{ $k->[1] }{queue}{count}).' : '.$self->{on_queue}{ $k->[0] }{ $k->[1] }{to}.' : HANG',8) if $self->{debug} >= 1;
+        $self->reconnect($k, $self->{retry}{ $k->[0] }{hang} ) if ($r == 1 or $r == 103);
       },
       on_error => sub {
         $self->{stats}{ $k->[0] }{ $k->[1] }{queue}{fail}++;
         my $r=$self->_FUNC('fail',$self,$k,0,[$self->{on_queue}{ $k->[0] }{ $k->[1] }]);
         
-        $self->_DEBUG($k,'Email : '.$self->{on_queue}{ $k->[0] }{ $k->[1] }{to}.' : FAIL',8) if $self->{debug} >= 1;
-        $self->reconnect($k->[0],$k->[1]) if ($r == 1 or $r == 103);
+        $self->_DEBUG($k,'Email : '.(++$self->{stats}{ $k->[0] }{ $k->[1] }{queue}{count}).' : '.$self->{on_queue}{ $k->[0] }{ $k->[1] }{to}.' : FAIL',8) if $self->{debug} >= 1;
+        $self->reconnect($k, $self->{retry}{ $k->[0] }{fail} ) if ($r == 1 or $r == 103);
         
         },
       %extra
@@ -458,8 +512,11 @@ sub _MAIL {
     
     if ( $self->{queue_size}{ $k->[0] }{ $k->[1] } == -1 ) {
         
-      $self->{cv}->end;
+      
       $self->_WRITE($k,'QUIT');
+      $self->{fh}{ $k->[0] }{ $k->[1] }->destroy;
+      $self->{cv}->end;
+      
       $self->{stage}{ $k->[0] }{ $k->[1] }=['END',0];
     } else {
     
@@ -545,7 +602,7 @@ sub _READ {
                 #}
                 
                 $self->{stats}{ $k->[0] }{ $k->[1] }{queue}{pass}++;
-                $self->_DEBUG($k,'Email : '.$self->{on_queue}{ $k->[0] }{ $k->[1] }{to}.' : PASS',8) if $self->{debug} >= 1;
+                $self->_DEBUG($k,'Email : '.(++$self->{stats}{ $k->[0] }{ $k->[1] }{queue}{count}).' : '.$self->{on_queue}{ $k->[0] }{ $k->[1] }{to}.' : PASS',8) if $self->{debug} >= 1;
                 my $r=$self->_FUNC('pass',$self,$k,0,$self->{queue}{ $k->[0] }{ $k->[1] });
 
                 
@@ -563,7 +620,18 @@ sub _READ {
                 $self->{stage}{ $k->[0] }{ $k->[1] }=['HELO',1];
                 }
             } elsif ( $self->{status_code}{ $k->[0] }{ $k->[1] } == 221 ) {
+                
+                
                 $self->{fh}{ $k->[0] }{ $k->[1] }->destroy;
+                
+                
+                
+            } elsif ( $self->{status_code}{ $k->[0] }{ $k->[1] } == 421 ) {
+                               
+                my $r=$self->_FUNC('hang',$self,$k,0,[$self->{on_queue}{ $k->[0] }{ $k->[1] }]);
+        $self->_DEBUG($k,'Email : '.(++$self->{stats}{ $k->[0] }{ $k->[1] }{queue}{count}).' : '.$self->{on_queue}{ $k->[0] }{ $k->[1] }{to}.' : HANG',8) if $self->{debug} >= 1;
+        $self->reconnect($k, $self->{retry}{ $k->[0] }{hang} ) if ($r == 1 or $r == 103);
+                
             } elsif ( $self->{status_code}{ $k->[0] }{ $k->[1] } == 250 and $self->{stage}{ $k->[0] }{ $k->[1] }[0] eq 'HELO' or $self->{stage}{ $k->[0] }{ $k->[1] }[0] eq 'HEADER' ) {
                 $self->{stage}{ $k->[0] }{ $k->[1] }=['HEADER',0];
                 $self->_HEADER($k,$self->{buffer}{ $k->[0] }{ $k->[1] });
@@ -648,14 +716,40 @@ sub _DEBUG {
     my $dlevel = shift||10;
     
     if ( $dlevel <= $self->{debug} ) {
+        my $out = '['.$k->[0].':'.$k->[1].':'.$self->{stats}{ $k->[0] }{ $k->[1] }{queue}{id}.']['.$self->_STRFTIME('[YYYY]-[MM]-[DD] [hh]:[mm]:[ss]',time).'] '.$str."\n";
 
         if ( exists($self->{debug_path}) ) {
-            print { $self->{debug_fh}{ $k->[0].':'.$k->[1] }  } '['.$k->[0].':'.$k->[1].'] '.$str."\n";
+            print { $self->{debug_fh}{ $k->[0].':'.$k->[1] }  } $out;
         } else {
-            print '['.$k->[0].':'.$k->[1].'] '.$str."\n";
+            print $out;
         }
     
     }
+}
+
+sub _STRFTIME {
+  my $self = shift;
+  my $format=shift;
+  my $time=shift;
+  
+    my @time=localtime($time);
+    
+    my %DT=(
+            'YYYY'=>$time[5]+1900,
+            'MM'=>sprintf('%.2d',$time[4]+1),
+            'DD'=>sprintf('%.2d',$time[3]),
+            'hh'=>sprintf('%.2d',$time[2]),
+            'mm'=>sprintf('%.2d',$time[1]),
+            'ss'=>sprintf('%.2d',$time[0]),
+            'MNA'=>$mon3[($time[4])],
+            'DNAME'=>$day6[($time[6])],
+            'WK'=>(( ($time[7]+1-$time[6]) <= 7) ? '01':sprintf('%.2d',($time[7]+1-$time[6])/7)+1)
+            );
+    
+    $format=~s/\[(YYYY|MM|DD|hh|mm|ss|MNA|DNAME|WK)\]/$DT{$1}/gs;
+    
+    return $format;
+
 }
 
 1;
