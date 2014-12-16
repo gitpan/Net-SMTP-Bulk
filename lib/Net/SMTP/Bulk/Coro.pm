@@ -15,16 +15,16 @@ Net::SMTP::Bulk::Coro - NonBlocking batch SMTP using Net::SMTP interface
 
 =head1 VERSION
 
-Version 0.16
+Version 0.19
 
 =cut
 
-our $VERSION = '0.16';
+our $VERSION = '0.19';
 
 
 =head1 SYNOPSIS
 
-This is a rewrite of Net::SMTP using AnyEvent and Coro as a backbone. It supports AUTH and SSL (no STARTTLS support yet). This module can be used as a drop in replacement for Net::SMTP. At this point this module is EXPIREMENTAL, so use at your own risk. Functionality can change at any time.
+This is a rewrite of Net::SMTP using AnyEvent and Coro as a backbone. It supports AUTH, SSL and STARTTLS as well. This module can be used as a drop in replacement for Net::SMTP. At this point this module is EXPIREMENTAL, so use at your own risk. Functionality can change at any time.
 
     use Net::SMTP::Bulk;
 
@@ -46,9 +46,9 @@ Port - The port to which to connect to on the server (default: 25)
 
 Hello - The domain name you wish to connect to (default: [same as server])
 
-Debug - Debug information (off: 0, on: 1) (default: 0 [disabled]) OPTIONAL
+Debug - Debug information (0-10 depending on level) (default: 0 [disabled]) OPTIONAL
 
-Secure - If you wish to use a secure connection. (0 - None, 1 - SSL [no verify]) OPTIONAL [Requires Net::SSLeay]
+Secure - If you wish to use a secure connection. (0 - None, 1 - SSL [no verify], 1 - SSL [verify], 3 - STARTTLS [no verify], 4 - STARTTLS [verify]) OPTIONAL [Requires Net::SSLeay]
 
 Threads - How many concurrent connections per host (default: 2) OPTIONAL
 
@@ -113,7 +113,11 @@ sub new {
     $self->{new}=\%new;
     $self->{encode} =  ( ($new{Encode}||'') eq '1' ) ? 'utf8':'';
     $self->{debug} = (($new{Debug}||0) >= 1) ? int($new{Debug}):0;
-    $self->{debug_path} = $new{DebugPath}||'debug_[HOST]_[THREAD].txt';
+
+    if ( ($new{DebugPath}||'') ne '' ) {
+        $self->{debug_path} = ( lc($new{DebugPath}) eq 'default' ) ? 'debug_[HOST]_[THREAD].txt':$new{DebugPath};
+    }
+
     $self->{func} = $new{Callbacks};
     $self->{defaults}={
                        threads=>$new{Threads}||2,
@@ -262,6 +266,8 @@ sub auth {
 
 sub quit {
     my $self=shift;
+
+
     
     $self->_BULK();
     
@@ -289,6 +295,7 @@ sub reconnect{
     $self->_HELO($k);
     $self->_READ($k);
     $self->_HEADER($k);
+    $self->_STARTTLS($k) if ($self->{secure}{ $k->[0] } == 3 or $self->{secure}{ $k->[0] } == 4);
     if ( $self->{auth}{ $k->[0] }{ $k->[1] }[0] == 1 ) {
         $self->{auth}{ $k->[0] }{ $k->[1] }[0]=0;
         my $auth=$self->auth($self->{auth}{ $k->[0] }{ $k->[1] }[1],'','',$k);
@@ -306,7 +313,19 @@ sub reconnect{
 sub _BULK {
     my $self=shift;
 
+ 
+
+        foreach my $k (@{$self->{order}}) {    
+
+            $self->{stats}{ $k->[0] }{ $k->[1] }{queue}{total}=($#{$self->{queue}{ $k->[0] }{ $k->[1] }}+1);
+
+            $self->_DEBUG($k,'Set Queue : '.$self->{stats}{ $k->[0] }{ $k->[1] }{queue}{total},5) if $self->{debug} >= 1;
+
+        }
+    
     foreach my $q ( 0..$self->{queue_size} ) {
+        
+
         
         foreach my $k (@{$self->{order}}) {
             if ($k->[2] == 1 and exists($self->{queue}{ $k->[0] }{ $k->[1] }[$q])) {
@@ -466,6 +485,9 @@ sub _PREPARE {
     my $self=shift;
     my $hosts=shift;
     $self->{order}=[];
+    
+    my $id=time;
+    
     foreach my $i ( 0..$#{$hosts} ) {
    
         my %new=( %{$hosts->[$i]} );
@@ -483,7 +505,7 @@ sub _PREPARE {
         $self->{queue_size}=-1;
        
         foreach my $t ( 0..$self->{threads}{ $new{Host} } ) {
-            if ($self->{debug} == 2) {
+            if ( exists($self->{debug_path}) ) {
                 my $path=''.$self->{debug_path};
                 $path=~s/\[HOST\]/$new{Host}/gs;
                 $path=~s/\[THREAD\]/$t/gs;
@@ -495,12 +517,14 @@ sub _PREPARE {
             $self->{auth}{ $new{Host} }{$t}=[0,''];
             $self->{queue}{ $new{Host} }{$t}=[];
             
+            $self->{stats}{ $new{Host} }{$t}{queue}{id}=$id;
+            
             push(@{$self->{order}}, [$new{Host},$t,1] );
             
             $self->_CONNECT([$new{Host},$t]);
 
         }
-        
+     
         $self->_SECURECHECK();
         
         foreach my $t ( 0..$self->{threads}{ $new{Host} } ) {
@@ -509,8 +533,10 @@ sub _PREPARE {
         foreach my $t ( 0..$self->{threads}{ $new{Host} } ) {
             $self->_READ([$new{Host},$t]);
             $self->_HEADER([$new{Host},$t]);
+            $self->_STARTTLS([$new{Host},$t]) if ($self->{secure}{ $new{Host} } == 3 or $self->{secure}{ $new{Host} } == 4);
         }
-    
+
+
     }
 }
 
@@ -523,6 +549,7 @@ sub _CONNECT {
         #Coro::rouse_cb
         sub{
             my $sock=$_[0];
+            $self->{sock}{ $k->[0] }{ $k->[1] }=$sock;
             $self->_SECURE($k,$sock) if ($self->{secure}{ $k->[0] } == 1 or $self->{secure}{ $k->[0] } == 2);
             $cb->($sock);
 
@@ -540,8 +567,60 @@ sub _CONNECT {
 sub _HELO {
     my $self=shift;
     my $k=shift;
+
     
-            $self->_READ($k);
+      my $fh= $self->{fh}{ $k->[0] }{ $k->[1] };
+  my $nb_fh = $fh->fh;
+  my $buf = \$fh->rbuf;
+
+  while () {
+        # now use buffer contents, modifying
+        # if necessary to reflect the removed data
+
+        last if $$buf ne ""; # we have leftover data
+
+        # read another buffer full of data
+        $fh->readable or die "end of file";
+        sysread $nb_fh, $$buf, 8192;
+    }
+    my $status=-1;
+    my $head='';
+    foreach my $line (split/[\r\n]+/,$$buf) {
+        $line=~m/^((\d{3})[ \-](.*?)[\r\n]*?)$/is;
+        $self->_DEBUG($k,$1) if $self->{debug} >= 1;
+        $status = lc($2);
+        $head = lc($3);
+    }
+    
+        $fh->rbuf='';
+        
+                if ($status == 220) {
+                my $r=$self->_FUNC('connect_pass',$self,$k,0,$self->{queue}{ $k->[0] }{ $k->[1] });
+                
+                if ($r != 1) {
+                    $self->_FUNC_CALLBACK($k,0,$r);
+                }
+                
+            } else {
+                #FAIL TO CONNECT
+                my $r=$self->_FUNC('connect_fail',$self,$k,0,$self->{queue}{ $k->[0] }{ $k->[1] });
+                
+                if ($r == 1) {
+                    $self->_FUNC_CALLBACK($k,0,101); #remove thread
+                } else {
+                    $self->_FUNC_CALLBACK($k,0,$r);
+                }
+                
+                
+            }
+    
+    
+ 
+
+=head2
+          $self->_READ($k);
+
+            
             
             if ($self->{status_code}{ $k->[0] }{ $k->[1] } == 220) {
                 my $r=$self->_FUNC('connect_pass',$self,$k,0,$self->{queue}{ $k->[0] }{ $k->[1] });
@@ -562,7 +641,9 @@ sub _HELO {
                 
                 
             }
-            
+=cut
+
+
             $self->_WRITE($k,'EHLO '.$self->{helo}{ $k->[0] });
    
     
@@ -593,11 +674,30 @@ sub _NEXT {
     $self->{last}=\@next;
 }
 
+sub _STARTTLS {
+    my $self=shift;
+    my $k=shift;
+    
+    if ( exists($self->{header}{ $k->[0] }{ $k->[1] }{starttls}) ) {
+        $self->_WRITE($k,'STARTTLS');
+        $self->_READ($k);
+        $self->_SECURE($k,$self->{sock}{ $k->[0] }{ $k->[1] });
+        $self->_SECURECHECK($k);
+        $self->_WRITE($k,'EHLO '.$self->{helo}{ $k->[0] });
+        $self->_READ($k);
+       $self->_HEADER($k);
+    }
+    
+
+ 
+}
+
 sub _SECURE {
     my $self=shift;
     my $k=shift;
     my $sock=shift;
-    $self->{secure_sock}{ $k->[0] }{ $k->[1] }=$sock;    
+    $self->{secure_sock}{ $k->[0] }{ $k->[1] }=$sock;
+    require IO::Select;
     require IO::Socket::SSL;
     
     my $sel = IO::Select->new($sock); # wait until it connected
@@ -607,10 +707,10 @@ sub _SECURE {
     }
     
     my %extra;
-    if ($self->{secure}{ $k->[0] } == 1) {
+    if ($self->{secure}{ $k->[0] } == 1 or $self->{secure}{ $k->[0] } == 3) {
         $extra{SSL_verify_mode}=Net::SSLeay::VERIFY_NONE(),
     }
-    
+
     
 
     IO::Socket::SSL->start_SSL($sock, %extra, SSL_startHandshake => 0);
@@ -649,6 +749,7 @@ sub _SECURECHECK {
 
                 }
                 if ( keys(%{$self->{secure_sel}{$h}}) == 0  ) {
+                    
                     delete($self->{secure_sel}{$h});  
                 }
             }
@@ -725,14 +826,16 @@ sub _READ {
     }
 
  
-    if (defined($str) and $str=~m/^((\d{3}).(.*?))[\r\n]+?$/) {
+    if (defined($str) and $str=~m/^((\d{3})(.)(.*?))[\r\n]+?$/) {
         $self->_DEBUG($k,$1) if $self->{debug} >= 1;
         $self->{buffer}{ $k->[0] }{ $k->[1] }=$1;
         $self->{status_code}{ $k->[0] }{ $k->[1] }=$2;
-        $self->{status_text}{ $k->[0] }{ $k->[1] }=$3;
+        $self->{status_mode}{ $k->[0] }{ $k->[1] }=$3;
+        $self->{status_text}{ $k->[0] }{ $k->[1] }=$4;
     } else {
         $self->{buffer}{ $k->[0] }{ $k->[1] }='';
         $self->{status_code}{ $k->[0] }{ $k->[1] }=-1;
+        $self->{status_mode}{ $k->[0] }{ $k->[1] }='';
         $self->{status_text}{ $k->[0] }{ $k->[1] }='';
     }
    
@@ -748,16 +851,52 @@ sub _WRITE {
     $self->{fh}{ $k->[0] }{ $k->[1] }->print( ($self->{encode} ne '') ? Encode::encode($self->{encode}=>$str."\r\n"):$str."\r\n"  );
 }
 
+
+
 sub _DEBUG {
     my $self=shift;
     my $k=shift;
     my $str=shift||'';
-    if ($self->{debug} == 1) {
-        print '['.$k->[0].':'.$k->[1].'] '.$str."\n";
-    } else {
-        print { $self->{debug_fh}{ $k->[0].':'.$k->[1] }  } '['.$k->[0].':'.$k->[1].'] '.$str."\n";
+    my $dlevel = shift||10;
+    
+    if ( $dlevel <= $self->{debug} ) {
+        my $out = '['.$k->[0].':'.$k->[1].':'.$self->{stats}{ $k->[0] }{ $k->[1] }{queue}{id}.']['.$self->_STRFTIME('[YYYY]-[MM]-[DD] [hh]:[mm]:[ss]',time).'] '.$str."\n";
+
+        if ( exists($self->{debug_path}) ) {
+            print { $self->{debug_fh}{ $k->[0].':'.$k->[1] }  } $out;
+        } else {
+            print $out;
+        }
+    
     }
 }
+
+sub _STRFTIME {
+  my $self = shift;
+  my $format=shift;
+  my $time=shift;
+  
+    my @time=localtime($time);
+    
+    my %DT=(
+            'YYYY'=>$time[5]+1900,
+            'MM'=>sprintf('%.2d',$time[4]+1),
+            'DD'=>sprintf('%.2d',$time[3]),
+            'hh'=>sprintf('%.2d',$time[2]),
+            'mm'=>sprintf('%.2d',$time[1]),
+            'ss'=>sprintf('%.2d',$time[0]),
+            #'MNA'=>$mon3[($time[4])],
+            #'DNAME'=>$day6[($time[6])],
+            'WK'=>(( ($time[7]+1-$time[6]) <= 7) ? '01':sprintf('%.2d',($time[7]+1-$time[6])/7)+1)
+            );
+    
+    $format=~s/\[(YYYY|MM|DD|hh|mm|ss|MNA|DNAME|WK)\]/$DT{$1}/gs;
+    
+    return $format;
+
+}
+
+
 
 =head1 AUTHOR
 

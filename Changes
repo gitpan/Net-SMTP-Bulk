@@ -1,5 +1,10 @@
 Revision history for Perl module Net::SMTP::Bulk
 
+0.19 2014-12-16
+    - Added STARTTLS support.
+    - Close Debug FH when done for Net::SMTP::Bulk::AnyEvent.
+    - Net::SMTP::Bulk::Coro is now partly converted to new debug format (Debug 1 - 10). **THIS BREAKS COMPATIBILITY WITH PREVIOUS VERSIONS**
+
 0.18 2014-11-07
     - Added debug email counter and timestamp to Net::SMTP::Bulk::AnyEvent.
     - Updated some hangs to be quicker to Net::SMTP::Bulk::AnyEvent.

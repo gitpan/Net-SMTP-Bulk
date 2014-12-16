@@ -16,16 +16,16 @@ Net::SMTP::Bulk - NonBlocking batch SMTP using Net::SMTP interface
 
 =head1 VERSION
 
-Version 0.18
+Version 0.19
 
 =cut
 
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 
 
 =head1 SYNOPSIS
 
-This is a rewrite of Net::SMTP using AnyEvent and Coro as a backbone. It supports AUTH and SSL (no STARTTLS support yet). This module can be used as a drop in replacement for Net::SMTP. At this point this module is EXPIREMENTAL, so use at your own risk. Functionality can change at any time.
+This is a rewrite of Net::SMTP using AnyEvent and Coro as a backbone. It supports AUTH, SSL and STARTTLS as well. This module can be used as a drop in replacement for Net::SMTP. At this point this module is EXPIREMENTAL, so use at your own risk. Functionality can change at any time.
 
     use Net::SMTP::Bulk;
 
@@ -49,11 +49,11 @@ Port - The port to which to connect to on the server (default: 25)
 
 Hello - The domain name you wish to connect to (default: [same as server])
 
-Debug - Debug information (Coro: off: 0, on: 1, AnyEvent: 0-10 depending on level) (default: 0 [disabled]) OPTIONAL
+Debug - Debug information (0-10 depending on level) (default: 0 [disabled]) OPTIONAL
 
 DebugPath - Set to default Debug Path. use [HOST] and [THREAD] for deeper control of output OPTIONAL
 
-Secure - If you wish to use a secure connection. (0 - None, 1 - SSL [no verify]) OPTIONAL [Requires Net::SSLeay]
+Secure - If you wish to use a secure connection. (0 - None, 1 - SSL [no verify], 1 - SSL [verify], 3 - STARTTLS [no verify], 4 - STARTTLS [verify]) OPTIONAL [Requires Net::SSLeay]
 
 Threads - How many concurrent connections per host (default: 2) OPTIONAL
 

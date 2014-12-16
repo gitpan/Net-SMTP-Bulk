@@ -15,7 +15,7 @@ You can supply multiple hosts in an array.
 
 =head2 auth( [ MECHANISM,] USERNAME, PASSWORD  )
 
-*Requires Authen::SASL
+
 
 =head2 mail( ADDRESS )
 
@@ -269,7 +269,9 @@ sub quit {
         }
     }
     
-    
+    foreach my $dfh ( keys(%{ $self->{debug_fh} }) ) {
+        close($self->{debug_fh}{$dfh})
+    }
      
 }
 
@@ -379,15 +381,15 @@ sub _CONNECT {
          
             if ( $self->{secure}{ $k->[0] } == 1 ) {
                 %extra=(
-                    tls      => "connect",
+                    tls      => 'connect',
                     tls_ctx  => { verify => 0, verify_peername => "smtp" }
                 );
             } elsif ( $self->{secure}{ $k->[0] } == 2 ) {
                 %extra=(
-                    tls      => "connect",
+                    tls      => 'connect',
                     tls_ctx  => { verify => 1, verify_peername => "smtp" }
                 );
-            }
+            } 
  
      $self->_DEBUG($k,"Connecting to $self->{host}{ $k->[0] } on port $self->{port}{ $k->[0] }") if $self->{debug} >= 1;
      
@@ -469,6 +471,43 @@ sub _HELO {
     my $k=shift;
     
     $self->_WRITE($k,'EHLO '.$self->{helo}{ $k->[0] });
+}
+
+sub _STARTTLS {
+    my $self=shift;
+    my $k=shift;
+
+    if ($self->{stage}{ $k->[0] }{ $k->[1] }[0] eq 'HEADER') {
+        $self->{stage}{ $k->[0] }{ $k->[1] }=['STARTTLS',0];
+        
+        
+        $self->_WRITE($k,'STARTTLS');
+    } else {
+      
+        my @extra;
+         
+        if ( $self->{secure}{ $k->[0] } == 3 ) {
+            @extra=(
+                'connect',
+                { verify => 0, verify_peername => "smtp" }
+                );
+        } elsif ( $self->{secure}{ $k->[0] } == 4 ) {
+            @extra=(
+                'connect',
+                { verify => 1, verify_peername => "smtp" }
+            );
+        }
+        
+
+        $self->{stage}{ $k->[0] }{ $k->[1] }=['BEGIN',0];
+        $self->{fh}{ $k->[0] }{ $k->[1] }->starttls(@extra);
+
+        $self->_HELO($k);
+        $self->{header}{ $k->[0] }{ $k->[1] }={};
+        $self->{stage}{ $k->[0] }{ $k->[1] }=['HELO',1];
+
+    }
+
 }
 
 sub _AUTH {
@@ -610,7 +649,7 @@ sub _READ {
                 $self->{stage}{ $k->[0] }{ $k->[1] }=['MAIL',0];
             }
             
-            if ( $self->{status_code}{ $k->[0] }{ $k->[1] } == 220 ) {
+            if ( $self->{status_code}{ $k->[0] }{ $k->[1] } == 220 and ($self->{stage}{ $k->[0] }{ $k->[1] }[0] eq 'BEGIN' or $self->{stage}{ $k->[0] }{ $k->[1] }[0] eq 'HELO') ) {
                 $self->{stage}{ $k->[0] }{ $k->[1] }=['HELO',0];
                 if (  $self->{status_mode}{ $k->[0] }{ $k->[1] } eq ' ' ) {
     
@@ -619,6 +658,10 @@ sub _READ {
                 $self->_HELO($k);
                 $self->{stage}{ $k->[0] }{ $k->[1] }=['HELO',1];
                 }
+            } elsif ( $self->{status_code}{ $k->[0] }{ $k->[1] } == 220 and $self->{stage}{ $k->[0] }{ $k->[1] }[0] eq 'STARTTLS' ) {    
+               
+               $self->_STARTTLS($k);
+                
             } elsif ( $self->{status_code}{ $k->[0] }{ $k->[1] } == 221 ) {
                 
                 
@@ -632,15 +675,19 @@ sub _READ {
         $self->_DEBUG($k,'Email : '.(++$self->{stats}{ $k->[0] }{ $k->[1] }{queue}{count}).' : '.$self->{on_queue}{ $k->[0] }{ $k->[1] }{to}.' : HANG',8) if $self->{debug} >= 1;
         $self->reconnect($k, $self->{retry}{ $k->[0] }{hang} ) if ($r == 1 or $r == 103);
                 
-            } elsif ( $self->{status_code}{ $k->[0] }{ $k->[1] } == 250 and $self->{stage}{ $k->[0] }{ $k->[1] }[0] eq 'HELO' or $self->{stage}{ $k->[0] }{ $k->[1] }[0] eq 'HEADER' ) {
+            } elsif ( ($self->{status_code}{ $k->[0] }{ $k->[1] } == 250 and $self->{stage}{ $k->[0] }{ $k->[1] }[0] eq 'HELO') or $self->{stage}{ $k->[0] }{ $k->[1] }[0] eq 'HEADER' ) {
                 $self->{stage}{ $k->[0] }{ $k->[1] }=['HEADER',0];
                 $self->_HEADER($k,$self->{buffer}{ $k->[0] }{ $k->[1] });
         
                 if ( $self->{status_mode}{ $k->[0] }{ $k->[1] } eq ' ' ) {
                      $self->{stage}{ $k->[0] }{ $k->[1] }=['HEADER',1]; 
                     
-                    if ( exists($self->{auth}{ $k->[0] }{ $k->[1] }) ) {
+                   
+                    if ( ($self->{secure}{ $k->[0] } == 3 or $self->{secure}{ $k->[0] } == 4) and exists($self->{header}{ $k->[0] }{ $k->[1] }{starttls})  ) {
+                       $self->_STARTTLS($k);
+                    } elsif ( exists($self->{auth}{ $k->[0] }{ $k->[1] }) ) {
                         $self->_AUTH($k);
+ 
                     } else {
                          $self->{stage}{ $k->[0] }{ $k->[1] }=['MAIL',0];
                        
@@ -741,8 +788,8 @@ sub _STRFTIME {
             'hh'=>sprintf('%.2d',$time[2]),
             'mm'=>sprintf('%.2d',$time[1]),
             'ss'=>sprintf('%.2d',$time[0]),
-            'MNA'=>$mon3[($time[4])],
-            'DNAME'=>$day6[($time[6])],
+            #'MNA'=>$mon3[($time[4])],
+            #'DNAME'=>$day6[($time[6])],
             'WK'=>(( ($time[7]+1-$time[6]) <= 7) ? '01':sprintf('%.2d',($time[7]+1-$time[6])/7)+1)
             );
     
